@@ -24,7 +24,6 @@ A full-stack web application for managing events from creation to ticket deliver
 - Promote users to organizer or admin roles
 - Monitor overall platform statistics
 
----
 
 ## Tech Stack
 
@@ -39,8 +38,6 @@ A full-stack web application for managing events from creation to ticket deliver
 | IDs         | `uuid`                              |
 | Config      | `dotenv`                            |
 
-
----
 
 ## Getting Started
 
@@ -80,11 +77,12 @@ NODE_ENV=development
 
 Open **MySQL Workbench** (or any MySQL client) and run the following scripts in order:
 
+1. Create tables:  
 ```bash
-# 1. Create tables
 source database/schema.sql
-
-# 2. (Optional) Load sample data
+```
+2. Load sample data (optional):
+```bash
 source database/seed.sql
 ```
 
@@ -105,7 +103,6 @@ Open your browser and navigate to:
 http://localhost:3000
 ```
 
----
 
 ## Default Roles & Seeded Accounts
 
@@ -117,9 +114,8 @@ After running `seed.sql`, the following test accounts are available:
 | Organizer  | `organizer@eventpro.com` | `org123`   |
 | Attendee   | `user@eventpro.com`      | `user123`  |
 
-> ⚠️ **Change all passwords before deploying to production.**
+> ⚠️ **Note: Change all passwords before deploying to production.**
 
----
 
 ## Routes Overview
 
@@ -135,7 +131,6 @@ After running `seed.sql`, the following test accounts are available:
 | POST   | `/auth/login`            | Login                              |
 | GET    | `/auth/logout`           | Logout                             |
 
----
 
 ## Security Notes
 
