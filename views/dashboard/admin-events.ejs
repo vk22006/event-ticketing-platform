@@ -27,6 +27,7 @@
                             <th>Seats</th>
                             <th>Price</th>
                             <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -62,6 +63,22 @@
                                         class="badge <%= e.status==='published'?'badge-green':e.status==='cancelled'?'badge-rose':e.status==='completed'?'badge-teal':'badge-grey' %>">
                                         <%= e.status %>
                                     </span>
+                                </td>
+                                <td>
+                                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                                        <a href="/events/<%= e.id %>/edit" class="btn btn-ghost btn-sm">Edit</a>
+                                        <form action="/events/<%= e.id %>/toggle-status" method="POST"
+                                            style="display:inline">
+                                            <button
+                                                class="btn btn-sm <%= e.status === 'published' ? 'btn-danger' : 'btn-success' %>">
+                                                <%= e.status==='published' ? 'Unpublish' : 'Publish' %>
+                                            </button>
+                                        </form>
+                                        <form action="/events/<%= e.id %>/delete" method="POST" style="display:inline"
+                                            onsubmit="return confirm('Delete this event?')">
+                                            <button class="btn btn-danger btn-sm">Delete</button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             <% }) %>
