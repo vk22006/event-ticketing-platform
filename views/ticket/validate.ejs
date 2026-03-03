@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        <%= title %> – EventPro
+    </title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container-sm" style="padding:2rem 1.5rem;">
+            <h1 style="font-size:1.5rem;margin-bottom:1.5rem;">🔍 Validate Ticket</h1>
+
+            <!-- Search Form -->
+            <form method="GET" action="/tickets/validate"
+                style="display:flex;gap:1rem;margin-bottom:2rem;flex-wrap:wrap;">
+                <input type="text" name="code" value="<%= code || '' %>"
+                    placeholder="Enter ticket code (e.g. EVT-1-BKG-2-ABCD1234)" class="form-control"
+                    style="flex:1;min-width:260px;" required />
+                <button type="submit" class="btn btn-primary">Validate</button>
+            </form>
+
+            <% if (code) { %>
+                <% if (ticket) { %>
+                    <!-- Ticket Found -->
+                    <div class="ticket-card" style="max-width:560px;">
+                        <div class="ticket-card__header">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                                <div>
+                                    <p
+                                        style="font-size:0.75rem;opacity:0.7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">
+                                        Ticket Validated</p>
+                                    <h2 style="font-size:1.25rem;margin-bottom:0.5rem;">
+                                        <%= ticket.event_title %>
+                                    </h2>
+                                    <p style="font-size:0.9rem;opacity:0.85;">
+                                        📅 <%= new Date(ticket.event_date).toLocaleDateString('en-IN',
+                                            {weekday:'long',day:'numeric',month:'long',year:'numeric'}) %>
+                                    </p>
+                                    <p style="font-size:0.9rem;opacity:0.85;">📍 <%= ticket.venue %>, <%= ticket.city %>
+                                    </p>
+                                </div>
+                                <div style="text-align:right;">
+                                    <% if (ticket.status==='active' ) { %>
+                                        <div style="font-size:2.5rem;">✅</div>
+                                        <span class="badge badge-green" style="margin-top:0.3rem;">VALID</span>
+                                        <% } else if (ticket.status==='used' ) { %>
+                                            <div style="font-size:2.5rem;">🔁</div>
+                                            <span class="badge badge-grey" style="margin-top:0.3rem;">USED</span>
+                                            <% } else { %>
+                                                <div style="font-size:2.5rem;">❌</div>
+                                                <span class="badge badge-rose"
+                                                    style="margin-top:0.3rem;">CANCELLED</span>
+                                                <% } %>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="border-top:2px dashed rgba(255,255,255,0.15);margin:0;"></div>
+
+                        <div class="ticket-card__body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+                                <div>
+                                    <p class="text-sm text-muted">Ticket Holder</p>
+                                    <p style="font-weight:600;margin-top:0.2rem;">
+                                        <%= ticket.full_name %>
+                                    </p>
+                                    <p class="text-sm text-muted">
+                                        <%= ticket.email %>
+                                    </p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-muted">Booking Amount</p>
+                                    <p style="font-weight:600;margin-top:0.2rem;">
+                                        <% if (ticket.total_amount==0) { %>FREE<% } else { %>₹<%=
+                                                    parseFloat(ticket.total_amount).toLocaleString('en-IN') %>
+                                                    <% } %>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p class="text-sm text-muted mb-1">Ticket Code</p>
+                                <div class="ticket-card__code">
+                                    <%= ticket.ticket_code %>
+                                </div>
+                            </div>
+
+                            <% if (ticket.status==='active' && user && user.role==='admin' ) { %>
+                                <form method="POST" action="/admin/tickets/<%= ticket.id %>/mark-used"
+                                    style="margin-top:1.25rem;">
+                                    <button type="submit" class="btn btn-primary btn-sm">✅ Mark as Used</button>
+                                </form>
+                                <% } %>
+                        </div>
+                    </div>
+                    <% } else { %>
+                        <!-- Ticket Not Found -->
+                        <div class="card" style="max-width:480px;text-align:center;padding:2rem;">
+                            <div style="font-size:3rem;margin-bottom:1rem;">❌</div>
+                            <h2 style="margin-bottom:0.5rem;color:var(--color-rose);">Ticket Not Found</h2>
+                            <p class="text-muted">No ticket was found with code: <strong>
+                                    <%= code %>
+                                </strong></p>
+                            <p class="text-muted" style="margin-top:0.5rem;">Please double-check the ticket code and try
+                                again.</p>
+                        </div>
+                        <% } %>
+                            <% } %>
+        </div>
+
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

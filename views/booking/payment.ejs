@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        <%= title %> – EventPro
+    </title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container-sm" style="padding:2rem 1.5rem;">
+            <div class="card" style="padding:2rem;">
+                <div class="text-center mb-3">
+                    <div style="font-size:2.5rem;">💳</div>
+                    <h1 style="font-size:1.5rem;">Complete Payment</h1>
+                    <p class="text-muted text-sm">Review your order and confirm</p>
+                </div>
+
+                <!-- Order Summary -->
+                <div
+                    style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius-md);padding:1.25rem;margin-bottom:1.5rem;">
+                    <h3
+                        style="font-size:0.95rem;margin-bottom:1rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em;">
+                        Order Summary</h3>
+                    <div class="flex-between text-sm mb-2">
+                        <span class="text-muted">Event</span>
+                        <strong>
+                            <%= event.title %>
+                        </strong>
+                    </div>
+                    <div class="flex-between text-sm mb-2">
+                        <span class="text-muted">Date</span>
+                        <span>
+                            <%= new
+                                Date(event.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})
+                                %>
+                        </span>
+                    </div>
+                    <div class="flex-between text-sm mb-2">
+                        <span class="text-muted">Venue</span>
+                        <span>
+                            <%= event.venue || '' %>
+                                <%= event.city %>
+                        </span>
+                    </div>
+                    <% if (seatType) { %>
+                        <div class="flex-between text-sm mb-2">
+                            <span class="text-muted">Seat Type</span>
+                            <span>
+                                <%= seatType.type_name %>
+                            </span>
+                        </div>
+                        <% } %>
+                            <div class="flex-between text-sm mb-2">
+                                <span class="text-muted">Tickets</span>
+                                <span>
+                                    <%= quantity %>×
+                                </span>
+                            </div>
+                            <hr style="border:none;border-top:1px dashed var(--border);margin:0.75rem 0;" />
+                            <div class="flex-between">
+                                <span class="text-muted">Total</span>
+                                <span style="font-size:1.4rem;font-weight:800;color:var(--green);">
+                                    <% if (total===0) { %>
+                                        FREE
+                                        <% } else { %>
+                                            ₹<%= parseFloat(total).toLocaleString('en-IN') %>
+                                                <% } %>
+                                </span>
+                            </div>
+                </div>
+
+                <!-- Mock Payment Method -->
+                <div class="form-group">
+                    <label class="form-label">Payment Method (Mock)</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.6rem;">
+                        <% [['💳','Credit Card'],['🏦','Net Banking'],['📱','UPI']].forEach(([icon,label],i)=> { %>
+                            <label
+                                style="cursor:pointer;text-align:center;padding:0.9rem;background:rgba(255,255,255,0.04);border:1.5px solid var(--border);border-radius:var(--radius-md);transition:var(--transition);"
+                                onclick="document.querySelectorAll('.pay-opt').forEach(l=>l.style.borderColor='var(--border)');this.style.borderColor='var(--accent)';"
+                                class="pay-opt" style="<%= i===0?'border-color:var(--accent);':'' %>">
+                                <div style="font-size:1.5rem;">
+                                    <%= icon %>
+                                </div>
+                                <p class="text-sm" style="margin-top:0.3rem;">
+                                    <%= label %>
+                                </p>
+                            </label>
+                            <% }) %>
+                    </div>
+                </div>
+
+                <!-- Confirm Payment Form -->
+                <form action="/bookings/confirm" method="POST">
+                    <input type="hidden" name="event_id" value="<%= event.id %>" />
+                    <input type="hidden" name="seat_type_id" value="<%= seatType ? seatType.id : '' %>" />
+                    <input type="hidden" name="quantity" value="<%= quantity %>" />
+
+                    <button type="submit" class="btn btn-primary btn-block btn-lg mt-2">
+                        <% if (total===0) { %>
+                            Confirm Free Registration 🎉
+                            <% } else { %>
+                                Pay ₹<%= parseFloat(total).toLocaleString('en-IN') %> & Confirm →
+                                    <% } %>
+                    </button>
+                </form>
+
+                <p class="text-center text-muted mt-2" style="font-size:0.78rem;">🔒 This is a mock payment for demo
+                    purposes only.</p>
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

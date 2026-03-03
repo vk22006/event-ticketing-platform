@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Booking Confirmed – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <style>
+        @keyframes popIn {
+            0% {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+
+            70% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .success-circle {
+            animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container-sm" style="padding:2rem 1.5rem;text-align:center;">
+
+            <div class="success-circle"
+                style="width:100px;height:100px;background:linear-gradient(135deg,#10b981,#06b6d4);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:3rem;margin:0 auto 1.5rem;">
+                ✅</div>
+
+            <h1 class="text-gradient" style="font-size:2rem;margin-bottom:0.5rem;">Booking Confirmed!</h1>
+            <p class="text-muted">Your tickets have been booked successfully. Enjoy the event! 🎉</p>
+
+            <!-- Booking Info -->
+            <div class="card" style="padding:1.5rem;text-align:left;margin:1.5rem 0;">
+                <div class="flex-between text-sm mb-2">
+                    <span class="text-muted">Booking #</span>
+                    <strong>#<%= booking.id %></strong>
+                </div>
+                <div class="flex-between text-sm mb-2">
+                    <span class="text-muted">Event</span>
+                    <strong>
+                        <%= event.title %>
+                    </strong>
+                </div>
+                <div class="flex-between text-sm mb-2">
+                    <span class="text-muted">Date</span>
+                    <span>
+                        <%= new
+                            Date(event.event_date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+                            %>
+                    </span>
+                </div>
+                <div class="flex-between text-sm mb-2">
+                    <span class="text-muted">Venue</span>
+                    <span>
+                        <%= event.venue || '' %>
+                            <%= event.city %>
+                    </span>
+                </div>
+                <div class="flex-between text-sm mb-2">
+                    <span class="text-muted">Tickets</span>
+                    <span>
+                        <%= booking.quantity %>
+                    </span>
+                </div>
+                <div class="flex-between text-sm mb-3">
+                    <span class="text-muted">Amount Paid</span>
+                    <strong class="text-green">
+                        <% if (booking.total_amount==0) { %>FREE<% } else { %>₹<%=
+                                    parseFloat(booking.total_amount).toLocaleString('en-IN') %>
+                                    <% } %>
+                    </strong>
+                </div>
+
+                <!-- Tickets -->
+                <hr style="border:none;border-top:2px dashed var(--border);margin-bottom:1rem;" />
+                <p class="text-sm text-muted mb-2">Your Ticket Code(s):</p>
+                <% tickets.forEach(t=> { %>
+                    <div class="ticket-card__code mb-2">
+                        <%= t.ticket_code %>
+                    </div>
+                    <% }) %>
+            </div>
+
+            <div style="display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;">
+                <a href="/tickets/my" class="btn btn-primary btn-lg">View My Tickets 🎟️</a>
+                <a href="/events" class="btn btn-ghost btn-lg">Browse More Events</a>
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

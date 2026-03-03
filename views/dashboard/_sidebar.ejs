@@ -1,0 +1,42 @@
+<aside class="sidebar">
+    <div class="sidebar__user">
+        <div class="sidebar__avatar">
+            <% if (user && user.avatar) { %>
+                <img src="<%= user.avatar %>" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />
+                <% } else { %>
+                    <%= user ? user.full_name.charAt(0).toUpperCase() : '?' %>
+                        <% } %>
+        </div>
+        <p class="sidebar__name">
+            <%= user ? user.full_name : '' %>
+        </p>
+        <p class="sidebar__email">
+            <%= user ? user.email : '' %>
+        </p>
+    </div>
+
+    <ul class="sidebar__nav">
+        <li><a href="/dashboard"
+                class="<%= typeof title !== 'undefined' && title.includes('Dashboard') ? 'active' : '' %>">🏠
+                Dashboard</a></li>
+
+        <% if (user && user.role==='organizer' ) { %>
+            <li><a href="/events/create">➕ Create Event</a></li>
+            <% } %>
+
+                <% if (user && user.role !=='organizer' ) { %>
+                    <li><a href="/bookings/my"
+                            class="<%= typeof title !== 'undefined' && title.includes('Booking') ? 'active' : '' %>">📋
+                            My Bookings</a></li>
+                    <li><a href="/tickets/my"
+                            class="<%= typeof title !== 'undefined' && title.includes('Ticket') ? 'active' : '' %>">🎟️
+                            My Tickets</a></li>
+                    <% } %>
+
+                        <li><a href="/dashboard/profile"
+                                class="<%= typeof title !== 'undefined' && title.includes('Profile') ? 'active' : '' %>">👤
+                                Profile</a></li>
+                        <li><a href="/events">🌍 Browse Events</a></li>
+                        <li><a href="/auth/logout" style="color:var(--rose);">🚪 Logout</a></li>
+    </ul>
+</aside>

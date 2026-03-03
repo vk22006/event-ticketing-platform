@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Tickets – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container">
+            <div class="dashboard-layout">
+                <%- include('_sidebar') %>
+
+                    <div>
+                        <div class="flex-between mb-4">
+                            <h1 style="font-size:1.6rem;">My Tickets 🎟️</h1>
+                            <a href="/events" class="btn btn-primary btn-sm">Browse Events</a>
+                        </div>
+
+                        <% if (tickets.length===0) { %>
+                            <div class="empty-state">
+                                <div class="empty-state__icon">🎫</div>
+                                <h3>No tickets yet</h3>
+                                <p>Book an event to get your tickets here</p>
+                                <a href="/events" class="btn btn-primary mt-3">Find Events</a>
+                            </div>
+                            <% } else { %>
+                                <div style="display:flex;flex-direction:column;gap:1rem;">
+                                    <% tickets.forEach(t=> { %>
+                                        <div class="ticket-card">
+                                            <div class="ticket-card__header" style="padding:1.1rem 1.5rem;">
+                                                <div
+                                                    style="display:flex;justify-content:space-between;align-items:center;">
+                                                    <div>
+                                                        <h3 style="font-size:1rem;margin-bottom:0.25rem;">
+                                                            <%= t.event_title %>
+                                                        </h3>
+                                                        <p style="font-size:0.82rem;opacity:0.8;">
+                                                            📅 <%= new
+                                                                Date(t.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})
+                                                                %>
+                                                                &nbsp;·&nbsp; 📍 <%= t.city %>
+                                                        </p>
+                                                    </div>
+                                                    <span
+                                                        class="badge <%= t.status==='active' ? 'badge-green' : t.status==='cancelled' ? 'badge-rose' : 'badge-grey' %>">
+                                                        <%= t.status %>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="ticket-card__body"
+                                                style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+                                                <div>
+                                                    <p class="text-sm text-muted">Ticket Code</p>
+                                                    <p
+                                                        style="font-family:monospace;font-size:0.82rem;margin-top:0.2rem;color:var(--accent-light);">
+                                                        <%= t.ticket_code %>
+                                                    </p>
+                                                </div>
+                                                <div style="display:flex;gap:0.6rem;">
+                                                    <a href="/tickets/<%= t.id %>" class="btn btn-ghost btn-sm">View</a>
+                                                    <a href="/tickets/<%= t.id %>/print" target="_blank"
+                                                        class="btn btn-outline btn-sm">🖨️ Print</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <% }) %>
+                                </div>
+                                <% } %>
+                    </div>
+
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+            <script src="/js/main.js"></script>
+</body>
+
+</html>

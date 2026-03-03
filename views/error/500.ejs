@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>500 – Server Error – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="flex-center"
+            style="min-height:calc(100vh - 140px);flex-direction:column;text-align:center;padding:2rem;">
+            <div style="font-size:5rem;margin-bottom:1rem;">💥</div>
+            <h1 class="text-gradient" style="font-size:4rem;font-weight:900;line-height:1;">500</h1>
+            <h2 style="font-size:1.4rem;margin:0.5rem 0 1rem;">Something went wrong</h2>
+            <p class="text-muted" style="max-width:420px;margin:0 auto 2rem;">
+                <%= typeof message !=='undefined' ? message
+                    : "Our server encountered an unexpected error. Please try again shortly." %>
+            </p>
+            <a href="/" class="btn btn-primary btn-lg">Go Home</a>
+        </div>
+
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

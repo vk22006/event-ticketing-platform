@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>404 – Not Found – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="flex-center"
+            style="min-height:calc(100vh - 140px);flex-direction:column;text-align:center;padding:2rem;">
+            <div style="font-size:6rem;margin-bottom:1rem;animation:fadeInUp 0.5s ease;">🎭</div>
+            <h1 class="text-gradient" style="font-size:5rem;font-weight:900;line-height:1;">404</h1>
+            <h2 style="font-size:1.4rem;margin:0.5rem 0 1rem;">This page doesn't exist</h2>
+            <p class="text-muted" style="max-width:400px;margin:0 auto 2rem;">
+                <%= typeof message !=='undefined' ? message
+                    : "The page you're looking for has been moved, deleted, or never existed." %>
+            </p>
+            <div style="display:flex;gap:1rem;justify-content:center;">
+                <a href="/" class="btn btn-primary btn-lg">Go Home</a>
+                <a href="/events" class="btn btn-ghost btn-lg">Browse Events</a>
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

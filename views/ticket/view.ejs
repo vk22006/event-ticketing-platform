@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        <%= title %> – EventPro
+    </title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container-sm" style="padding:2rem 1.5rem;">
+            <a href="/tickets/my" class="btn btn-ghost btn-sm mb-3">← My Tickets</a>
+
+            <div class="ticket-card">
+                <!-- Ticket Header -->
+                <div class="ticket-card__header">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                        <div>
+                            <p
+                                style="font-size:0.75rem;opacity:0.7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">
+                                EventPro Ticket</p>
+                            <h1 style="font-size:1.4rem;margin-bottom:0.5rem;">
+                                <%= ticket.event_title %>
+                            </h1>
+                            <p style="font-size:0.9rem;opacity:0.85;">📅 <%= new
+                                    Date(ticket.event_date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+                                    %>
+                            </p>
+                            <p style="font-size:0.9rem;opacity:0.85;">📍 <%= ticket.venue %>, <%= ticket.city %>
+                            </p>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:3rem;">🎟️</div>
+                            <span
+                                class="badge <%= ticket.status==='active'?'badge-green':ticket.status==='cancelled'?'badge-rose':'badge-grey' %>"
+                                style="margin-top:0.3rem;">
+                                <%= ticket.status %>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ticket-card__divider" style="margin:0;border-top:2px dashed rgba(255,255,255,0.15);"></div>
+
+                <!-- Body -->
+                <div class="ticket-card__body">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem;">
+                        <div>
+                            <p class="text-sm text-muted">Ticket Holder</p>
+                            <p style="font-weight:600;margin-top:0.2rem;">
+                                <%= ticket.full_name %>
+                            </p>
+                            <p class="text-sm text-muted">
+                                <%= ticket.email %>
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-muted">Quantity</p>
+                            <p style="font-weight:600;margin-top:0.2rem;">
+                                <%= ticket.quantity %> ticket(s)
+                            </p>
+                            <p class="text-sm text-muted">
+                                Total: <% if (ticket.total_amount==0) { %>FREE<% } else { %>₹<%=
+                                            parseFloat(ticket.total_amount).toLocaleString('en-IN') %>
+                                            <% } %>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-sm text-muted mb-1">Ticket Code</p>
+                        <div class="ticket-card__code">
+                            <%= ticket.ticket_code %>
+                        </div>
+                    </div>
+
+                    <p class="text-sm text-muted mt-2">Issued: <%= new
+                            Date(ticket.issued_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})
+                            %>
+                    </p>
+
+                    <div style="display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap;">
+                        <a href="/tickets/<%= ticket.id %>/print" target="_blank" class="btn btn-primary">🖨️ Print
+                            Ticket</a>
+                        <a href="/events" class="btn btn-ghost">Browse More Events</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

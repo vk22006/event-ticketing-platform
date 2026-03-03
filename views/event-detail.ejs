@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        <%= title %> – EventPro
+    </title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+    <%- include('partials/navbar') %>
+
+        <div class="container" style="padding-top:2rem;padding-bottom:3rem">
+
+            <!-- Back -->
+            <a href="/events" class="btn btn-ghost btn-sm mb-3">← Back to Events</a>
+
+            <div style="display:grid;grid-template-columns:1fr 380px;gap:2rem;align-items:start;">
+
+                <!-- LEFT: Event Details -->
+                <div>
+                    <!-- Banner -->
+                    <div
+                        style="border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;height:340px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:6rem;">
+                        <% if (event.banner_image) { %>
+                            <img src="<%= event.banner_image %>" alt="<%= event.title %>"
+                                style="width:100%;height:340px;object-fit:cover;" />
+                            <% } else { %>
+                                <span>
+                                    <%= event.category_icon || '🎫' %>
+                                </span>
+                                <% } %>
+                    </div>
+
+                    <!-- Title & badges -->
+                    <div class="flex gap-2 mb-2" style="flex-wrap:wrap;">
+                        <% if (event.category_name) { %>
+                            <span class="badge badge-purple">
+                                <%= event.category_icon %>
+                                    <%= event.category_name %>
+                            </span>
+                            <% } %>
+                                <% if (event.status==='published' ) { %>
+                                    <span class="badge badge-green">● Published</span>
+                                    <% } else { %>
+                                        <span class="badge badge-grey">
+                                            <%= event.status %>
+                                        </span>
+                                        <% } %>
+                                            <% if (event.ticket_price==0) { %>
+                                                <span class="badge badge-teal">Free Entry</span>
+                                                <% } %>
+                    </div>
+
+                    <h1 style="font-size:2rem;margin-bottom:1rem;">
+                        <%= event.title %>
+                    </h1>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1.5rem;">
+                        <div class="card" style="padding:1rem;">
+                            <p class="text-sm text-muted">📅 Date & Time</p>
+                            <p class="text-sm" style="margin-top:0.3rem;font-weight:600;">
+                                <%= new
+                                    Date(event.event_date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+                                    %>
+                            </p>
+                            <p class="text-sm text-muted">
+                                <%= new
+                                    Date(event.event_date).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})
+                                    %>
+                            </p>
+                        </div>
+                        <div class="card" style="padding:1rem;">
+                            <p class="text-sm text-muted">📍 Venue</p>
+                            <p class="text-sm" style="margin-top:0.3rem;font-weight:600;">
+                                <%= event.venue || 'TBA' %>
+                            </p>
+                            <p class="text-sm text-muted">
+                                <%= event.city %>
+                            </p>
+                        </div>
+                    </div>
+
+                    <% if (event.description) { %>
+                        <div class="card" style="padding:1.25rem;margin-bottom:1.5rem;">
+                            <h3 style="margin-bottom:0.75rem;">About this Event</h3>
+                            <p style="color:var(--text-secondary);line-height:1.8;">
+                                <%= event.description %>
+                            </p>
+                        </div>
+                        <% } %>
+
+                            <div class="card" style="padding:1rem;">
+                                <p class="text-sm text-muted">Organised by</p>
+                                <p style="font-weight:600;margin-top:0.3rem;">👤 <%= event.organizer_name %>
+                                </p>
+                                <p class="text-sm text-muted">
+                                    <%= event.organizer_email %>
+                                </p>
+                            </div>
+                </div>
+
+                <!-- RIGHT: Booking Panel -->
+                <div style="position:sticky;top:90px;">
+                    <div class="card" style="padding:1.5rem;">
+                        <h2 style="margin-bottom:0.5rem;">
+                            <% if (event.ticket_price==0) { %>
+                                Free Event 🎉
+                                <% } else { %>
+                                    ₹<%= parseFloat(event.ticket_price).toLocaleString('en-IN') %> <span
+                                            class="text-sm text-muted">/ ticket</span>
+                                        <% } %>
+                        </h2>
+
+                        <div class="divider">availability</div>
+
+                        <div style="margin-bottom:1rem;">
+                            <div class="flex-between text-sm mb-1">
+                                <span class="text-muted">Seats Available</span>
+                                <strong class="<%= event.available_seats === 0 ? 'text-rose' : 'text-green' %>">
+                                    <%= event.available_seats %> / <%= event.total_seats %>
+                                </strong>
+                            </div>
+                            <div
+                                style="height:6px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;">
+                                <div
+                                    style="height:100%;width:<%= Math.round((event.available_seats/event.total_seats)*100) %>%;background:linear-gradient(90deg,var(--accent),var(--teal));border-radius:99px;transition:width 0.5s;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <% if (event.registration_deadline) { %>
+                            <p class="text-sm text-muted mb-3">
+                                ⏰ Registration closes: <%= new
+                                    Date(event.registration_deadline).toLocaleDateString('en-IN') %>
+                            </p>
+                            <% } %>
+
+                                <!-- Seat Types -->
+                                <% if (seatTypes && seatTypes.length> 0) { %>
+                                    <p class="text-sm text-muted mb-2">Seat Types:</p>
+                                    <% seatTypes.forEach(st=> { %>
+                                        <div
+                                            style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.7rem 1rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">
+                                            <span class="text-sm">
+                                                <%= st.type_name %>
+                                            </span>
+                                            <span class="badge badge-amber">₹<%=
+                                                    parseFloat(st.price).toLocaleString('en-IN') %></span>
+                                        </div>
+                                        <% }) %>
+                                            <% } %>
+
+                                                <% if (event.available_seats===0) { %>
+                                                    <button class="btn btn-danger btn-block btn-lg mt-3" disabled>Sold
+                                                        Out</button>
+                                                    <% } else if (!user) { %>
+                                                        <a href="/auth/login"
+                                                            class="btn btn-primary btn-block btn-lg mt-3">Login to
+                                                            Book</a>
+                                                        <% } else if (user.role==='organizer' || user.role==='admin' ) {
+                                                            %>
+                                                            <p class="text-sm text-muted text-center mt-3">Organisers
+                                                                cannot book tickets.</p>
+                                                            <% } else { %>
+                                                                <a href="/bookings/book/<%= event.id %>"
+                                                                    class="btn btn-primary btn-block btn-lg mt-3">Book
+                                                                    Now 🎟️</a>
+                                                                <% } %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <%- include('partials/footer') %>
+            <script src="/js/main.js"></script>
+</body>
+
+</html>

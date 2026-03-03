@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manage Events – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+        <div class="container" style="padding:2rem 1.5rem;">
+            <div class="flex-between mb-4">
+                <h1 style="font-size:1.6rem;">🌍 All Events</h1>
+                <a href="/admin/dashboard" class="btn btn-ghost btn-sm">← Dashboard</a>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Title</th>
+                            <th>Organizer</th>
+                            <th>Date</th>
+                            <th>Seats</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% events.forEach(e=> { %>
+                            <tr>
+                                <td class="text-muted text-sm">
+                                    <%= e.id %>
+                                </td>
+                                <td>
+                                    <a href="/events/<%= e.id %>" style="color:var(--accent-light);font-weight:600;">
+                                        <%= e.title %>
+                                    </a><br />
+                                    <span class="text-muted text-sm">📍 <%= e.city %></span>
+                                </td>
+                                <td class="text-sm">
+                                    <%= e.organizer_name %>
+                                </td>
+                                <td class="text-sm">
+                                    <%= new Date(e.event_date).toLocaleDateString('en-IN') %>
+                                </td>
+                                <td class="text-sm">
+                                    <%= e.available_seats %> / <%= e.total_seats %>
+                                </td>
+                                <td class="text-sm">
+                                    <% if (e.ticket_price==0) { %>
+                                        <span class="badge badge-green">Free</span>
+                                        <% } else { %>
+                                            ₹<%= parseFloat(e.ticket_price).toLocaleString('en-IN') %>
+                                                <% } %>
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge <%= e.status==='published'?'badge-green':e.status==='cancelled'?'badge-rose':e.status==='completed'?'badge-teal':'badge-grey' %>">
+                                        <%= e.status %>
+                                    </span>
+                                </td>
+                            </tr>
+                            <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

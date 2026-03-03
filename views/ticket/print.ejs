@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Ticket – <%= ticket.ticket_code %>
+    </title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #fff;
+            color: #1a1a2e;
+            padding: 2rem;
+        }
+
+        .ticket {
+            max-width: 600px;
+            margin: 0 auto;
+            border: 2px solid #7c5cfc;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .ticket__header {
+            background: linear-gradient(135deg, #7c5cfc, #5b3fd4);
+            color: #fff;
+            padding: 1.5rem;
+        }
+
+        .ticket__header h1 {
+            font-size: 1.3rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .ticket__header p {
+            font-size: 0.85rem;
+            opacity: 0.85;
+        }
+
+        .ticket__body {
+            padding: 1.5rem;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        .label {
+            color: #666;
+        }
+
+        .code {
+            font-family: monospace;
+            background: #f0f0ff;
+            border: 1px dashed #7c5cfc;
+            border-radius: 8px;
+            padding: 0.7rem 1rem;
+            letter-spacing: 0.1em;
+            word-break: break-all;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 1.25rem;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="ticket">
+        <div class="ticket__header">
+            <p
+                style="font-size:0.72rem;opacity:0.7;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem;">
+                EventPro — Official Ticket</p>
+            <h1>
+                <%= ticket.event_title %>
+            </h1>
+            <p>📅 <%= new
+                    Date(ticket.event_date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+                    %>
+            </p>
+            <p>📍 <%= ticket.venue %>, <%= ticket.city %>
+            </p>
+        </div>
+        <div class="ticket__body">
+            <div class="row"><span class="label">Ticket Holder</span><strong>
+                    <%= ticket.full_name %>
+                </strong></div>
+            <div class="row"><span class="label">Email</span><span>
+                    <%= ticket.email %>
+                </span></div>
+            <div class="row"><span class="label">Quantity</span><span>
+                    <%= ticket.quantity %>
+                </span></div>
+            <div class="row"><span class="label">Amount</span><strong>
+                    <%= ticket.total_amount==0 ? 'FREE' : '₹' + parseFloat(ticket.total_amount).toLocaleString('en-IN')
+                        %>
+                </strong></div>
+            <div class="row"><span class="label">Status</span><strong
+                    style="color:<%= ticket.status==='active'?'green':'red' %>">
+                    <%= ticket.status.toUpperCase() %>
+                </strong></div>
+            <div class="code">
+                <%= ticket.ticket_code %>
+            </div>
+            <p class="footer-note">Present this ticket at the venue entrance. Issued: <%= new
+                    Date(ticket.issued_at).toLocaleDateString('en-IN') %>
+            </p>
+        </div>
+    </div>
+
+    <div class="no-print" style="text-align:center;margin-top:1.5rem;">
+        <button onclick="window.print()"
+            style="padding:0.6rem 1.5rem;background:#7c5cfc;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;">🖨️
+            Print</button>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manage Users – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+        <div class="container" style="padding:2rem 1.5rem;">
+            <div class="flex-between mb-4">
+                <h1 style="font-size:1.6rem;">👥 Manage Users</h1>
+                <a href="/admin/dashboard" class="btn btn-ghost btn-sm">← Dashboard</a>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Joined</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% users.forEach(u=> { %>
+                            <tr>
+                                <td class="text-muted text-sm">
+                                    <%= u.id %>
+                                </td>
+                                <td><strong>
+                                        <%= u.full_name %>
+                                    </strong></td>
+                                <td class="text-muted text-sm">
+                                    <%= u.email %>
+                                </td>
+                                <td><span class="role-badge role-badge--<%= u.role %>">
+                                        <%= u.role %>
+                                    </span></td>
+                                <td class="text-sm text-muted">
+                                    <%= new Date(u.created_at).toLocaleDateString('en-IN') %>
+                                </td>
+                            </tr>
+                            <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <%- include('../partials/footer') %>
+</body>
+
+</html>

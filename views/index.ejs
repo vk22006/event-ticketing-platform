@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        <%= title %> – EventPro
+    </title>
+    <meta name="description" content="Discover and book amazing events near you." />
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+
+    <%- include('partials/navbar') %>
+
+        <!-- ── Hero ─────────────────────────────────────────────── -->
+        <section class="page-hero">
+            <div class="container">
+                <h1 class="text-gradient">Discover Amazing Events</h1>
+                <p>From music festivals to tech conferences — find, book, and experience it all.</p>
+            </div>
+        </section>
+
+        <!-- ── Filter Bar ────────────────────────────────────────── -->
+        <div class="container">
+            <form class="filter-bar" method="GET" action="/events" id="filterForm">
+                <input type="text" name="search" placeholder="🔍 Search events..." value="<%= query.search || '' %>" />
+                <select name="category_id" onchange="this.form.submit()">
+                    <option value="">All Categories</option>
+                    <% categories.forEach(cat=> { %>
+                        <option value="<%= cat.id %>" <%=query.category_id==cat.id ? 'selected' : '' %>>
+                            <%= cat.icon %>
+                                <%= cat.name %>
+                        </option>
+                        <% }) %>
+                </select>
+                <input type="text" name="city" placeholder="📍 City" value="<%= query.city || '' %>" />
+                <button type="submit" class="btn btn-primary btn-sm">Search</button>
+                <% if (query.search || query.category_id || query.city) { %>
+                    <a href="/events" class="btn btn-ghost btn-sm">Clear</a>
+                    <% } %>
+            </form>
+
+            <!-- ── Events Grid ──────────────────────────────────────── -->
+            <% if (events.length===0) { %>
+                <div class="empty-state fade-in-up">
+                    <div class="empty-state__icon">🎭</div>
+                    <h3>No events found</h3>
+                    <p>Try different search terms or clear your filters.</p>
+                    <a href="/events" class="btn btn-outline mt-3">Browse All Events</a>
+                </div>
+                <% } else { %>
+                    <div class="events-grid">
+                        <% events.forEach((event, i)=> { %>
+                            <article class="card fade-in-up" style="animation-delay: <%= i * 0.07 %>s">
+                                <div class="card__image">
+                                    <% if (event.banner_image) { %>
+                                        <img src="<%= event.banner_image %>" alt="<%= event.title %>"
+                                            style="width:100%;height:200px;object-fit:cover;" />
+                                        <% } else { %>
+                                            <span style="font-size:3.5rem">
+                                                <%= event.category_icon || '🎫' %>
+                                            </span>
+                                            <% } %>
+                                </div>
+                                <div class="card__body">
+                                    <div class="card__meta">
+                                        <% if (event.category_name) { %>
+                                            <span class="badge badge-purple">
+                                                <%= event.category_icon %>
+                                                    <%= event.category_name %>
+                                            </span>
+                                            <% } %>
+                                                <% if (event.ticket_price==0) { %>
+                                                    <span class="badge badge-green">Free</span>
+                                                    <% } else { %>
+                                                        <span class="badge badge-amber">₹<%=
+                                                                parseFloat(event.ticket_price).toLocaleString('en-IN')
+                                                                %></span>
+                                                        <% } %>
+                                    </div>
+                                    <h2 class="card__title">
+                                        <%= event.title %>
+                                    </h2>
+                                    <p class="text-sm text-muted mb-2">
+                                        📅 <%= new Date(event.event_date).toLocaleDateString('en-IN', { weekday:'short',
+                                            day:'numeric', month:'short', year:'numeric' }) %>
+                                    </p>
+                                    <p class="text-sm text-muted">
+                                        📍 <%= event.venue ? event.venue + ', ' : '' %>
+                                            <%= event.city %>
+                                    </p>
+                                </div>
+                                <div class="card__footer">
+                                    <span class="text-sm text-muted">
+                                        🎟️ <%= event.available_seats %> seats left
+                                    </span>
+                                    <a href="/events/<%= event.id %>" class="btn btn-primary btn-sm">View Event</a>
+                                </div>
+                            </article>
+                            <% }) %>
+                    </div>
+                    <% } %>
+        </div>
+
+        <%- include('partials/footer') %>
+            <script src="/js/main.js"></script>
+</body>
+
+</html>

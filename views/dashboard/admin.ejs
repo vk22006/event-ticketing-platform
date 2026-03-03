@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container" style="padding:2rem 1.5rem;">
+
+            <div class="flex-between mb-4">
+                <div>
+                    <h1 style="font-size:1.8rem;">Admin Dashboard 🛡️</h1>
+                    <p class="text-muted text-sm">Platform overview and management</p>
+                </div>
+                <div style="display:flex;gap:0.6rem;">
+                    <a href="/admin/users" class="btn btn-ghost btn-sm">Manage Users</a>
+                    <a href="/admin/events" class="btn btn-ghost btn-sm">Manage Events</a>
+                    <a href="/admin/reports" class="btn btn-outline btn-sm">Reports</a>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <span class="stat-card__icon">👥</span>
+                    <span class="stat-card__value text-gradient">
+                        <%= stats.totalUsers %>
+                    </span>
+                    <span class="stat-card__label">Total Users</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card__icon">🎪</span>
+                    <span class="stat-card__value" style="color:var(--amber);">
+                        <%= stats.organizers %>
+                    </span>
+                    <span class="stat-card__label">Organizers</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card__icon">🌍</span>
+                    <span class="stat-card__value" style="color:var(--teal);">
+                        <%= stats.totalEvents %>
+                    </span>
+                    <span class="stat-card__label">Total Events</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card__icon">✅</span>
+                    <span class="stat-card__value" style="color:var(--green);">
+                        <%= stats.publishedEvents %>
+                    </span>
+                    <span class="stat-card__label">Published</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card__icon">🎫</span>
+                    <span class="stat-card__value" style="color:var(--accent-light);">
+                        <%= stats.totalBookings %>
+                    </span>
+                    <span class="stat-card__label">Confirmed Bookings</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-card__icon">💰</span>
+                    <span class="stat-card__value" style="color:var(--green);">₹<%=
+                            parseFloat(stats.revenue).toLocaleString('en-IN') %></span>
+                    <span class="stat-card__label">Total Revenue</span>
+                </div>
+            </div>
+
+            <!-- Recent Bookings Table -->
+            <div class="section-title mt-4 mb-2">Recent Bookings</div>
+
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>User</th>
+                            <th>Event</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (recentBookings.length===0) { %>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted" style="padding:2rem;">No bookings yet.
+                                </td>
+                            </tr>
+                            <% } %>
+                                <% recentBookings.forEach(b=> { %>
+                                    <tr>
+                                        <td class="text-muted text-sm">#<%= b.id %>
+                                        </td>
+                                        <td>
+                                            <strong>
+                                                <%= b.full_name %>
+                                            </strong><br />
+                                            <span class="text-muted text-sm">
+                                                <%= b.email %>
+                                            </span>
+                                        </td>
+                                        <td class="text-sm">
+                                            <%= b.event_title %>
+                                        </td>
+                                        <td class="text-sm text-green">₹<%=
+                                                parseFloat(b.total_amount).toLocaleString('en-IN') %>
+                                        </td>
+                                        <td>
+                                            <span
+                                                class="badge <%= b.status==='confirmed'?'badge-green':b.status==='cancelled'?'badge-rose':'badge-grey' %>">
+                                                <%= b.status %>
+                                            </span>
+                                        </td>
+                                        <td class="text-sm text-muted">
+                                            <%= new Date(b.booked_at).toLocaleDateString('en-IN') %>
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="text-center mt-4">
+                <a href="/admin/reports" class="btn btn-outline">View Full Reports →</a>
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+            <script src="/js/main.js"></script>
+</body>
+
+</html>

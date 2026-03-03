@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Bookings – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container">
+            <div class="dashboard-layout">
+                <%- include('_sidebar') %>
+
+                    <div>
+                        <div class="flex-between mb-4">
+                            <h1 style="font-size:1.6rem;">My Bookings 📋</h1>
+                            <a href="/events" class="btn btn-primary btn-sm">Browse Events</a>
+                        </div>
+
+                        <% if (bookings.length===0) { %>
+                            <div class="empty-state">
+                                <div class="empty-state__icon">📋</div>
+                                <h3>No bookings yet</h3>
+                                <p>Discover and book your first event!</p>
+                                <a href="/events" class="btn btn-primary mt-3">Browse Events</a>
+                            </div>
+                            <% } else { %>
+                                <div class="table-wrapper">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Event</th>
+                                                <th>Date</th>
+                                                <th>Tickets</th>
+                                                <th>Total</th>
+                                                <th>Status</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <% bookings.forEach(b=> { %>
+                                                <tr>
+                                                    <td class="text-muted text-sm">#<%= b.id %>
+                                                    </td>
+                                                    <td>
+                                                        <strong>
+                                                            <%= b.event_title %>
+                                                        </strong><br />
+                                                        <span class="text-muted text-sm">📍 <%= b.venue || '' %>
+                                                                <%= b.city %></span>
+                                                    </td>
+                                                    <td class="text-sm">
+                                                        <%= new
+                                                            Date(b.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})
+                                                            %>
+                                                    </td>
+                                                    <td class="text-sm">
+                                                        <%= b.quantity %>
+                                                    </td>
+                                                    <td class="text-sm text-green">
+                                                        <% if (b.total_amount==0) { %>Free<% } else { %>₹<%=
+                                                                    parseFloat(b.total_amount).toLocaleString('en-IN')
+                                                                    %>
+                                                                    <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <span
+                                                            class="badge <%= b.status==='confirmed'?'badge-green':b.status==='cancelled'?'badge-rose':'badge-grey' %>">
+                                                            <%= b.status %>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <% if (b.status==='confirmed' ) { %>
+                                                            <form action="/bookings/<%= b.id %>/cancel" method="POST"
+                                                                onsubmit="return confirm('Cancel this booking?')">
+                                                                <button class="btn btn-danger btn-sm">Cancel</button>
+                                                            </form>
+                                                            <% } else { %>
+                                                                <span class="text-muted text-sm">—</span>
+                                                                <% } %>
+                                                    </td>
+                                                </tr>
+                                                <% }) %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <% } %>
+                    </div>
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+            <script src="/js/main.js"></script>
+</body>
+
+</html>

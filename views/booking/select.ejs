@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        <%= title %> – EventPro
+    </title>
+    <link rel="stylesheet" href="/css/main.css" />
+</head>
+
+<body>
+    <%- include('../partials/navbar') %>
+
+        <div class="container-sm" style="padding:2rem 1.5rem;">
+            <a href="/events/<%= event.id %>" class="btn btn-ghost btn-sm mb-3">← Back to Event</a>
+
+            <div class="card" style="padding:2rem;">
+                <!-- Event summary -->
+                <div
+                    style="background:rgba(124,92,252,0.08);border:1px solid rgba(124,92,252,0.2);border-radius:var(--radius-md);padding:1rem;margin-bottom:1.5rem;">
+                    <h2 style="font-size:1.1rem;margin-bottom:0.4rem;">
+                        <%= event.title %>
+                    </h2>
+                    <p class="text-sm text-muted">📅 <%= new
+                            Date(event.event_date).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})
+                            %>
+                    </p>
+                    <p class="text-sm text-muted">📍 <%= event.venue || '' %>
+                            <%= event.city %>
+                    </p>
+                    <p class="text-sm text-muted mt-1">🎟️ <strong>
+                            <%= event.available_seats %>
+                        </strong> seats remaining</p>
+                </div>
+
+                <h2 style="font-size:1.3rem;margin-bottom:1.25rem;">Select Your Tickets</h2>
+
+                <% if (error) { %>
+                    <div class="alert alert-error">⚠️ <%= error %>
+                    </div>
+                    <% } %>
+
+                        <form action="/bookings/payment" method="GET" id="selectForm">
+                            <input type="hidden" name="eventId" value="<%= event.id %>" />
+
+                            <!-- Seat type selection -->
+                            <% if (seatTypes && seatTypes.length> 0) { %>
+                                <div class="form-group">
+                                    <label class="form-label">Seat Type</label>
+                                    <div style="display:flex;flex-direction:column;gap:0.6rem;">
+                                        <% seatTypes.forEach((st, idx)=> {
+                                            const remaining = st.total_seats - st.booked_seats;
+                                            %>
+                                            <label
+                                                style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:0.9rem 1.1rem;transition:var(--transition);"
+                                                id="seatLabel<%= idx %>"
+                                                onclick="document.querySelectorAll('[id^=seatLabel]').forEach(l=>l.style.borderColor='var(--border)');this.style.borderColor='var(--accent)';">
+                                                <span>
+                                                    <input type="radio" name="seat_type_id" value="<%= st.id %>"
+                                                        style="margin-right:0.5rem;" <%=idx===0?'checked':'' %> />
+                                                    <strong>
+                                                        <%= st.type_name %>
+                                                    </strong>
+                                                    <span class="text-sm text-muted" style="margin-left:0.5rem;">(<%=
+                                                            remaining %> left)</span>
+                                                </span>
+                                                <span class="badge badge-amber">₹<%=
+                                                        parseFloat(st.price).toLocaleString('en-IN') %></span>
+                                            </label>
+                                            <% }) %>
+                                    </div>
+                                </div>
+                                <% } else { %>
+                                    <input type="hidden" name="seat_type_id" value="" />
+                                    <div class="form-group">
+                                        <p class="text-sm text-muted">🎟️ Standard ticket — ₹<%=
+                                                parseFloat(event.ticket_price).toLocaleString('en-IN') %>
+                                        </p>
+                                    </div>
+                                    <% } %>
+
+                                        <!-- Quantity -->
+                                        <div class="form-group">
+                                            <label class="form-label">Number of Tickets</label>
+                                            <div style="display:flex;align-items:center;gap:1rem;">
+                                                <button type="button" onclick="changeQty(-1)" class="btn btn-ghost"
+                                                    style="width:40px;padding:0.4rem;justify-content:center;">−</button>
+                                                <input type="number" name="quantity" id="qtyInput" class="form-control"
+                                                    value="1" min="1" max="10" style="text-align:center;max-width:80px;"
+                                                    readonly />
+                                                <button type="button" onclick="changeQty(1)" class="btn btn-ghost"
+                                                    style="width:40px;padding:0.4rem;justify-content:center;">+</button>
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary btn-block btn-lg mt-2">Continue to
+                                            Payment →</button>
+                        </form>
+            </div>
+        </div>
+
+        <%- include('../partials/footer') %>
+            <script>
+                function changeQty(delta) {
+                    const input = document.getElementById('qtyInput');
+                    const newVal = Math.min(10, Math.max(1, parseInt(input.value) + delta));
+                    input.value = newVal;
+                }
+            </script>
+</body>
+
+</html>
