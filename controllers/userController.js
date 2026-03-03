@@ -8,6 +8,9 @@ exports.showDashboard = async (req, res) => {
 
         if (req.session.role === 'organizer') {
             data.events = await Event.getByOrganizer(req.session.userId);
+        } else if (req.session.role === 'admin') {
+            // Admins see all events from all organizers
+            data.events = await Event.findAll({ status: null });
         } else {
             data.bookings = await Booking.findByUser(req.session.userId);
         }

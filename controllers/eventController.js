@@ -3,6 +3,10 @@ const Category = require('../models/Category');
 const SeatType = require('../models/SeatType');
 const path = require('path');
 
+// Admins can manage any event; organizers only their own
+const canManage = (event, req) =>
+    req.session.role === 'admin' || event.organizer_id === req.session.userId;
+
 exports.listEvents = async (req, res) => {
     try {
         const { category_id, city, search, page = 1 } = req.query;
@@ -95,7 +99,7 @@ exports.showEdit = async (req, res) => {
         Category.findAll(),
     ]);
 
-    if (!event || event.organizer_id !== req.session.userId)
+    if (!event || !canManage(event, req))
         return res.status(403).render('error/404', { title: 'Forbidden' });
 
     res.render('dashboard/edit-event', {
@@ -108,7 +112,7 @@ exports.showEdit = async (req, res) => {
 exports.updateEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
-        if (!event || event.organizer_id !== req.session.userId)
+        if (!event || !canManage(event, req))
             return res.status(403).render('error/404', { title: 'Forbidden' });
 
         const { title, description, venue, city, event_date, registration_deadline,
@@ -132,7 +136,7 @@ exports.updateEvent = async (req, res) => {
 
 exports.deleteEvent = async (req, res) => {
     const event = await Event.findById(req.params.id);
-    if (!event || event.organizer_id !== req.session.userId)
+    if (!event || !canManage(event, req))
         return res.status(403).json({ error: 'Forbidden' });
 
     await Event.delete(req.params.id);
@@ -141,7 +145,7 @@ exports.deleteEvent = async (req, res) => {
 
 exports.toggleStatus = async (req, res) => {
     const event = await Event.findById(req.params.id);
-    if (!event || event.organizer_id !== req.session.userId)
+    if (!event || !canManage(event, req))
         return res.status(403).json({ error: 'Forbidden' });
 
     const newStatus = event.status === 'published' ? 'draft' : 'published';
