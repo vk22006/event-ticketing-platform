@@ -1,5 +1,5 @@
 10211CS224 - Full Stack Application Development
-# EventPro — End-to-End Event Lifecycle & Ticketing Platform
+# End-to-End Event Lifecycle & Ticketing Platform
 
 A full-stack web application for managing events from creation to ticket delivery. EventPro supports three user roles — **Attendees**, **Organizers**, and **Admins** — each with their own dedicated dashboard and feature set.
 
@@ -39,73 +39,6 @@ A full-stack web application for managing events from creation to ticket deliver
 | IDs         | `uuid`                              |
 | Config      | `dotenv`                            |
 
----
-
-## Project Structure
-
-```
-End-to-end-Event-Lifecycle/
-├── app.js                  # Express app entry point
-├── config/
-│   └── db.js               # MySQL connection pool
-├── controllers/            # Route handler logic
-│   ├── authController.js
-│   ├── eventController.js
-│   ├── bookingController.js
-│   ├── ticketController.js
-│   ├── userController.js
-│   └── adminController.js
-├── database/
-│   ├── schema.sql          # Table definitions
-│   └── seed.sql            # Sample data
-├── middleware/
-│   ├── authMiddleware.js   # Session authentication guard
-│   ├── roleMiddleware.js   # Role-based access control
-│   └── errorHandler.js     # 404 & 500 handlers
-├── models/                 # Database query models
-│   ├── User.js
-│   ├── Event.js
-│   ├── Booking.js
-│   ├── Ticket.js
-│   ├── Category.js
-│   └── SeatType.js
-├── routes/                 # Express routers
-│   ├── auth.js
-│   ├── events.js
-│   ├── bookings.js
-│   ├── tickets.js
-│   ├── dashboard.js
-│   └── admin.js
-├── views/                  # EJS templates
-│   ├── index.ejs
-│   ├── event-detail.ejs
-│   ├── my-tickets.ejs
-│   ├── auth/
-│   ├── booking/
-│   ├── dashboard/
-│   ├── ticket/
-│   ├── error/
-│   └── partials/
-├── public/                 # Static assets (CSS, JS, uploads)
-├── utils/                  # Helper utilities
-├── .env                    # Environment variables (see below)
-└── package.json
-```
-
----
-
-## Database Schema
-
-The platform uses **5 relational tables**:
-
-| Table        | Description                                     |
-|--------------|-------------------------------------------------|
-| `users`      | Stores all users with roles: user / organizer / admin |
-| `categories` | Event categories (Music, Tech, Sports, etc.)   |
-| `events`     | Event listings linked to organizers & categories |
-| `seat_types` | Per-event seat tiers (VIP, General, Student)   |
-| `bookings`   | Booking records linking users ↔ events          |
-| `tickets`    | Individual tickets with unique codes, per booking |
 
 ---
 
