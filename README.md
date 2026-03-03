@@ -1,4 +1,5 @@
-# 🎟️ EventPro — End-to-End Event Lifecycle & Ticketing Platform
+10211CS224 - Full Stack Application Development
+# EventPro — End-to-End Event Lifecycle & Ticketing Platform
 
 A full-stack web application for managing events from creation to ticket delivery. EventPro supports three user roles — **Attendees**, **Organizers**, and **Admins** — each with their own dedicated dashboard and feature set.
 
