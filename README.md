@@ -4,28 +4,28 @@ A full-stack web application for managing events from creation to ticket deliver
 
 ---
 
-## ✨ Features
+## Features
 
-### 👤 Attendees
+### Attendees
 - Browse and search published events by category, city, and date
 - Book tickets with seat-type selection (e.g. VIP, General, Student)
 - View and download personal tickets with unique ticket codes
 - Manage bookings and cancel if needed
 
-### 🎪 Organizers
+### Organizers
 - Create, edit, and publish events with banner image uploads
 - Define multiple seat types with individual pricing
 - Track bookings and revenue per event
 - Cancel events and manage event lifecycle (Draft → Published → Completed)
 
-### 🛡️ Admins
+### Admins
 - View all users, organizers, and events platform-wide
 - Promote users to organizer or admin roles
 - Monitor overall platform statistics
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer       | Technology                          |
 |-------------|-------------------------------------|
@@ -40,7 +40,7 @@ A full-stack web application for managing events from creation to ticket deliver
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 End-to-end-Event-Lifecycle/
@@ -93,7 +93,7 @@ End-to-end-Event-Lifecycle/
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
 The platform uses **5 relational tables**:
 
@@ -108,7 +108,7 @@ The platform uses **5 relational tables**:
 
 ---
 
-## ⚙️ Getting Started
+## Getting Started
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) v18+
@@ -173,7 +173,7 @@ http://localhost:3000
 
 ---
 
-## 🔐 Default Roles & Seeded Accounts
+## Default Roles & Seeded Accounts
 
 After running `seed.sql`, the following test accounts are available:
 
@@ -187,7 +187,7 @@ After running `seed.sql`, the following test accounts are available:
 
 ---
 
-## 🌐 Routes Overview
+## Routes Overview
 
 | Method | Route                    | Description                        |
 |--------|--------------------------|------------------------------------|
@@ -203,7 +203,7 @@ After running `seed.sql`, the following test accounts are available:
 
 ---
 
-## 🔒 Security Notes
+## Security Notes
 
 - Passwords are hashed with **bcryptjs** before storage.
 - All protected routes use session-based authentication middleware.
@@ -212,6 +212,6 @@ After running `seed.sql`, the following test accounts are available:
 
 ---
 
-## 📜 License
+<!-- ## 📜 License
 
-ISC License — see [LICENSE](LICENSE) for details.
+ISC License — see [LICENSE](LICENSE) for details. -->
