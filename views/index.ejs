@@ -28,7 +28,7 @@
         <!-- ── Filter Bar ────────────────────────────────────────── -->
         <div class="container">
             <form class="filter-bar" method="GET" action="/events" id="filterForm">
-                <input type="text" name="search" placeholder="🔍 Search events..." value="<%= query.search || '' %>" />
+                <input type="text" name="search" placeholder="⌕ Search events..." value="<%= query.search || '' %>" />
                 <select name="category_id" onchange="this.form.submit()">
                     <option value="">All Categories</option>
                     <% categories.forEach(cat=> { %>
@@ -38,7 +38,7 @@
                         </option>
                         <% }) %>
                 </select>
-                <input type="text" name="city" placeholder="📍 City" value="<%= query.city || '' %>" />
+                <input type="text" name="city" placeholder=" City" value="<%= query.city || '' %>" />
                 <button type="submit" class="btn btn-primary btn-sm">Search</button>
                 <% if (query.search || query.category_id || query.city) { %>
                     <a href="/events" class="btn btn-ghost btn-sm">Clear</a>
@@ -87,11 +87,11 @@
                                         <%= event.title %>
                                     </h2>
                                     <p class="text-sm text-muted mb-2">
-                                        📅 <%= new Date(event.event_date).toLocaleDateString('en-IN', { weekday:'short',
+                                         <%= new Date(event.event_date).toLocaleDateString('en-IN', { weekday:'short',
                                             day:'numeric', month:'short', year:'numeric' }) %>
                                     </p>
                                     <p class="text-sm text-muted">
-                                        📍 <%= event.venue ? event.venue + ', ' : '' %>
+                                         <%= event.venue ? event.venue + ', ' : '' %>
                                             <%= event.city %>
                                     </p>
                                 </div>
