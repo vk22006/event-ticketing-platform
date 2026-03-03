@@ -22,13 +22,13 @@
         .ticket {
             max-width: 600px;
             margin: 0 auto;
-            border: 2px solid #7c5cfc;
+            border: 2px solid #4f46e5;
             border-radius: 16px;
             overflow: hidden;
         }
 
         .ticket__header {
-            background: linear-gradient(135deg, #7c5cfc, #5b3fd4);
+            background: #4f46e5;
             color: #fff;
             padding: 1.5rem;
         }
@@ -60,8 +60,8 @@
 
         .code {
             font-family: monospace;
-            background: #f0f0ff;
-            border: 1px dashed #7c5cfc;
+            background: #eef2ff;
+            border: 1px dashed #4f46e5;
             border-radius: 8px;
             padding: 0.7rem 1rem;
             letter-spacing: 0.1em;
@@ -120,7 +120,7 @@
                         %>
                 </strong></div>
             <div class="row"><span class="label">Status</span><strong
-                    style="color:<%= ticket.status==='active'?'green':'red' %>">
+                    class="<%= ticket.status==='active'?'status-active':'status-inactive' %>">
                     <%= ticket.status.toUpperCase() %>
                 </strong></div>
             <div class="code">
@@ -134,7 +134,7 @@
 
     <div class="no-print" style="text-align:center;margin-top:1.5rem;">
         <button onclick="window.print()"
-            style="padding:0.6rem 1.5rem;background:#7c5cfc;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;">🖨️
+            style="padding:0.6rem 1.5rem;background:#4f46e5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;">🖨️
             Print</button>
     </div>
 </body>

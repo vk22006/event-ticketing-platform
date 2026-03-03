@@ -93,8 +93,7 @@
                                                                 <form action="/events/<%= evt.id %>/toggle-status"
                                                                     method="POST" style="display:inline">
                                                                     <button
-                                                                        class="btn btn-sm <%= evt.status === 'published' ? 'btn-warning' : 'btn-success' %>"
-                                                                        style="<%= evt.status !== 'published' ? 'background:rgba(16,185,129,0.15);color:var(--green);border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(245,158,11,0.15);color:var(--amber);border:1px solid rgba(245,158,11,0.3);' %>">
+                                                                        class="btn btn-sm <%= evt.status === 'published' ? 'btn-danger' : 'btn-success' %>">
                                                                         <%= evt.status==='published' ? 'Unpublish'
                                                                             : 'Publish' %>
                                                                     </button>

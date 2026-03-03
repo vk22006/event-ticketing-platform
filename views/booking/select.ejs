@@ -19,7 +19,7 @@
             <div class="card" style="padding:2rem;">
                 <!-- Event summary -->
                 <div
-                    style="background:rgba(124,92,252,0.08);border:1px solid rgba(124,92,252,0.2);border-radius:var(--radius-md);padding:1rem;margin-bottom:1.5rem;">
+                    style="background:var(--primary-light);border:1px solid var(--primary-dim);border-radius:var(--radius-md);padding:1rem;margin-bottom:1.5rem;">
                     <h2 style="font-size:1.1rem;margin-bottom:0.4rem;">
                         <%= event.title %>
                     </h2>
@@ -54,9 +54,9 @@
                                             const remaining = st.total_seats - st.booked_seats;
                                             %>
                                             <label
-                                                style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:0.9rem 1.1rem;transition:var(--transition);"
+                                                style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:var(--bg-subtle);border:1.5px solid var(--border-dark);border-radius:var(--radius-md);padding:0.9rem 1.1rem;transition:var(--transition);"
                                                 id="seatLabel<%= idx %>"
-                                                onclick="document.querySelectorAll('[id^=seatLabel]').forEach(l=>l.style.borderColor='var(--border)');this.style.borderColor='var(--accent)';">
+                                                onclick="document.querySelectorAll('[id^=seatLabel]').forEach(l=>l.style.borderColor='var(--border-dark)');this.style.borderColor='var(--primary)';">
                                                 <span>
                                                     <input type="radio" name="seat_type_id" value="<%= st.id %>"
                                                         style="margin-right:0.5rem;" <%=idx===0?'checked':'' %> />

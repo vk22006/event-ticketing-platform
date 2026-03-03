@@ -29,7 +29,7 @@ document.querySelectorAll('.card, .stat-card').forEach(el => {
 document.querySelectorAll('.navbar__nav a').forEach(link => {
     if (link.href === window.location.href) {
         link.style.color = 'var(--text-primary)';
-        link.style.background = 'var(--bg-card)';
+        link.style.background = 'var(--bg-subtle)';
     }
 });
 
@@ -56,7 +56,7 @@ document.querySelectorAll('form[data-confirm]').forEach(form => {
 document.querySelectorAll('[id^="seatLabel"]').forEach((label, _, all) => {
     label.addEventListener('click', () => {
         all.forEach(l => l.style.borderColor = 'var(--border)');
-        label.style.borderColor = 'var(--accent)';
+        label.style.borderColor = 'var(--primary)';
     });
 });
 
@@ -64,14 +64,14 @@ document.querySelectorAll('[id^="seatLabel"]').forEach((label, _, all) => {
 document.querySelectorAll('.pay-opt').forEach((opt, idx, all) => {
     opt.addEventListener('click', () => {
         all.forEach(o => o.style.borderColor = 'var(--border)');
-        opt.style.borderColor = 'var(--accent)';
+        opt.style.borderColor = 'var(--primary)';
     });
-    if (idx === 0) opt.style.borderColor = 'var(--accent)';
+    if (idx === 0) opt.style.borderColor = 'var(--primary)';
 });
 
 // ── Table row hover highlight ──────────────────────────────
 document.querySelectorAll('.table tbody tr').forEach(row => {
-    row.addEventListener('mouseenter', () => row.style.background = 'rgba(124,92,252,0.06)');
+    row.addEventListener('mouseenter', () => row.style.background = 'var(--bg-subtle)');
     row.addEventListener('mouseleave', () => row.style.background = '');
 });
 

@@ -26,7 +26,7 @@
                 <div>
                     <!-- Banner -->
                     <div
-                        style="border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;height:340px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:6rem;">
+                        style="border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;height:340px;background:var(--bg-subtle);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:6rem;">
                         <% if (event.banner_image) { %>
                             <img src="<%= event.banner_image %>" alt="<%= event.title %>"
                                 style="width:100%;height:340px;object-fit:cover;" />
@@ -127,11 +127,13 @@
                                 </strong>
                             </div>
                             <div
-                                style="height:6px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;">
-                                <div
-                                    style="height:100%;width:<%= Math.round((event.available_seats/event.total_seats)*100) %>%;background:linear-gradient(90deg,var(--accent),var(--teal));border-radius:99px;transition:width 0.5s;">
+                                style="height:6px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:99px;overflow:hidden;">
+                                <div id="seatBar"
+                                    data-pct="<%= Math.round((event.available_seats/event.total_seats)*100) %>"
+                                    style="height:100%;width:0%;background:var(--primary);border-radius:99px;transition:width 0.5s;">
                                 </div>
                             </div>
+                            <script>var b = document.getElementById('seatBar'); b.style.width = b.dataset.pct + '%';</script>
                         </div>
 
                         <% if (event.registration_deadline) { %>
@@ -146,7 +148,7 @@
                                     <p class="text-sm text-muted mb-2">Seat Types:</p>
                                     <% seatTypes.forEach(st=> { %>
                                         <div
-                                            style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.7rem 1rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">
+                                            style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.7rem 1rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">
                                             <span class="text-sm">
                                                 <%= st.type_name %>
                                             </span>

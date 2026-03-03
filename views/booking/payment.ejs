@@ -23,9 +23,9 @@
 
                 <!-- Order Summary -->
                 <div
-                    style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius-md);padding:1.25rem;margin-bottom:1.5rem;">
+                    style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius-md);padding:1.25rem;margin-bottom:1.5rem;">
                     <h3
-                        style="font-size:0.95rem;margin-bottom:1rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em;">
+                        style="font-size:0.78rem;margin-bottom:1rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
                         Order Summary</h3>
                     <div class="flex-between text-sm mb-2">
                         <span class="text-muted">Event</span>
@@ -81,9 +81,9 @@
                     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.6rem;">
                         <% [['💳','Credit Card'],['🏦','Net Banking'],['📱','UPI']].forEach(([icon,label],i)=> { %>
                             <label
-                                style="cursor:pointer;text-align:center;padding:0.9rem;background:rgba(255,255,255,0.04);border:1.5px solid var(--border);border-radius:var(--radius-md);transition:var(--transition);"
-                                onclick="document.querySelectorAll('.pay-opt').forEach(l=>l.style.borderColor='var(--border)');this.style.borderColor='var(--accent)';"
-                                class="pay-opt" style="<%= i===0?'border-color:var(--accent);':'' %>">
+                                style="cursor:pointer;text-align:center;padding:0.9rem;background:var(--bg-subtle);border:1.5px solid var(--border-dark);border-radius:var(--radius-md);transition:var(--transition);"
+                                onclick="document.querySelectorAll('.pay-opt').forEach(l=>l.style.borderColor='var(--border-dark)');this.style.borderColor='var(--primary)';"
+                                class="pay-opt">
                                 <div style="font-size:1.5rem;">
                                     <%= icon %>
                                 </div>
