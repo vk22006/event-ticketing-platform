@@ -1,3 +1,4 @@
 node_modules/
+review_presentation/
 .env
 *.log
