@@ -1,4 +1,5 @@
 node_modules/
 review_presentation/
+img/
 .env
 *.log
