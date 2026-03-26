@@ -3,7 +3,7 @@
 
 A full-stack web application for managing events from creation to ticket delivery. EventPro supports three user roles — **Attendees**, **Organizers**, and **Admins** — each with their own dedicated dashboard and feature set.
 
----
+![Default Home Page](img/home_page.png)
 
 ## Features
 
