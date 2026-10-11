@@ -28,8 +28,7 @@ pub async fn readiness(State(state): State<AppState>) -> impl IntoResponse {
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({
                     "status": "unhealthy",
-                    "database": "disconnected",
-                    "error": err.to_string()
+                    "database": "disconnected"
                 })),
             )
         }
