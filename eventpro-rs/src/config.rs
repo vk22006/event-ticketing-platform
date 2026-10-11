@@ -1,5 +1,101 @@
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// RFC 3986 userinfo percent-encode set.
+/// Encodes control characters plus URI-reserved delimiters:
+/// ':', '@', '/', '?', '#', '%', '[', ']', '\\', ' ', '"'
+const USERINFO_ENCODE_SET: &AsciiSet = &CONTROLS
+    .add(b':')
+    .add(b'@')
+    .add(b'/')
+    .add(b'?')
+    .add(b'#')
+    .add(b'%')
+    .add(b'[')
+    .add(b']')
+    .add(b'\\')
+    .add(b' ')
+    .add(b'"');
+
+/// Percent-encode user credentials to safely construct RFC 3986 connection URIs.
+pub fn encode_credential(s: &str) -> String {
+    utf8_percent_encode(s, USERINFO_ENCODE_SET).to_string()
+}
+
+/// Construct a standardized MySQL URL with percent-encoded credentials.
+pub fn build_database_url(
+    user: &str,
+    password: &str,
+    host: &str,
+    port: &str,
+    db_name: &str,
+) -> String {
+    let encoded_user = encode_credential(user);
+    if password.is_empty() {
+        format!("mysql://{}@{}:{}/{}", encoded_user, host, port, db_name)
+    } else {
+        let encoded_password = encode_credential(password);
+        format!(
+            "mysql://{}:{}@{}:{}/{}",
+            encoded_user, encoded_password, host, port, db_name
+        )
+    }
+}
+
+/// Verify that a candidate path exists and contains the required subdirectories.
+pub fn validate_public_dir(path: &Path) -> bool {
+    path.is_dir()
+        && path.join("css").is_dir()
+        && path.join("js").is_dir()
+        && path.join("uploads").is_dir()
+}
+
+/// Resolve the public asset directory reliably across execution working directories.
+pub fn resolve_public_dir() -> Result<PathBuf, ConfigError> {
+    // 1. Explicit override via environment variable
+    if let Ok(dir_str) = std::env::var("PUBLIC_DIR") {
+        let candidate = PathBuf::from(dir_str);
+        if validate_public_dir(&candidate) {
+            return std::fs::canonicalize(&candidate).map_err(|e| {
+                ConfigError::InvalidPublicDir(format!(
+                    "Failed to canonicalize PUBLIC_DIR {:?}: {}",
+                    candidate, e
+                ))
+            });
+        }
+        return Err(ConfigError::InvalidPublicDir(format!(
+            "Specified PUBLIC_DIR {:?} does not exist or lacks required subdirectories (css, js, uploads)",
+            candidate
+        )));
+    }
+
+    // 2. Candidate paths based on standard project layout
+    let mut candidates = vec![
+        PathBuf::from("../public"), // When launched from eventpro-rs/
+        PathBuf::from("public"),    // When launched from repository root
+    ];
+
+    // Fallback: check relative to CARGO_MANIFEST_DIR if set
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        if let Some(parent) = Path::new(&manifest_dir).parent() {
+            candidates.push(parent.join("public"));
+        }
+    }
+
+    for candidate in &candidates {
+        if validate_public_dir(candidate) {
+            if let Ok(canonical) = std::fs::canonicalize(candidate) {
+                return Ok(canonical);
+            }
+        }
+    }
+
+    Err(ConfigError::InvalidPublicDir(format!(
+        "Public asset directory could not be resolved from candidates: {:?}",
+        candidates
+    )))
+}
 
 #[derive(Clone)]
 pub struct AppConfig {
@@ -34,6 +130,10 @@ pub enum ConfigError {
     SessionSecretTooShort,
     #[error("Invalid port: {0}")]
     InvalidPort(String),
+    #[error(
+        "Public asset directory not found or missing required structure (css, js, uploads): {0}"
+    )]
+    InvalidPublicDir(String),
 }
 
 impl AppConfig {
@@ -55,9 +155,7 @@ impl AppConfig {
         let session_secret = std::env::var("SESSION_SECRET")
             .unwrap_or_else(|_| "ev3nt_l1fecycle_s3cret_k3y_2024".to_string());
 
-        let public_dir = std::env::var("PUBLIC_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("../public"));
+        let public_dir = resolve_public_dir()?;
 
         let config = Self {
             host,
@@ -81,6 +179,13 @@ impl AppConfig {
             return Err(ConfigError::SessionSecretTooShort);
         }
 
+        if !validate_public_dir(&self.public_dir) {
+            return Err(ConfigError::InvalidPublicDir(format!(
+                "Public directory {:?} is invalid or missing required structure (css, js, uploads)",
+                self.public_dir
+            )));
+        }
+
         Ok(())
     }
 
@@ -102,14 +207,7 @@ impl AppConfig {
             return Err(ConfigError::MissingDatabaseConfig);
         }
 
-        if password.is_empty() {
-            Ok(format!("mysql://{}@{}:{}/{}", user, host, port, db_name))
-        } else {
-            Ok(format!(
-                "mysql://{}:{}@{}:{}/{}",
-                user, password, host, port, db_name
-            ))
-        }
+        Ok(build_database_url(&user, &password, &host, &port, &db_name))
     }
 
     pub fn is_production(&self) -> bool {
