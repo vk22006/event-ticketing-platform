@@ -1,4 +1,8 @@
+.sf/
 node_modules/
 review_presentation/
+eventpro-rs/target/
 .env
 *.log
+
+
