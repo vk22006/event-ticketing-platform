@@ -50,14 +50,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure persistent server-side session store in MySQL
     let session_store = MySqlStore::new(pool.clone());
-    if let Err(e) = session_store.migrate().await {
-        tracing::warn!(
+    session_store.migrate().await.map_err(|e| {
+        tracing::error!(
             error = %e,
-            "Could not run session store migration automatically (may already exist or need permissions)"
+            "Fatal startup error: failed to initialize MySQL session store schema"
         );
-    } else {
-        tracing::info!("Session store migration executed / verified");
-    }
+        e
+    })?;
+    tracing::info!("Session store migration executed / verified");
 
     let session_layer = SessionManagerLayer::new(session_store)
         .with_name("eventpro_sid")
