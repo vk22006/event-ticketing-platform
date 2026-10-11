@@ -18,6 +18,44 @@ impl AppState {
         jinja.add_filter("inr", filter_inr);
         jinja.add_filter("date_in", filter_date_in);
 
+        // Register core Phase 2 templates
+        jinja
+            .add_template(
+                "partials/navbar.html",
+                include_str!("../templates/partials/navbar.html"),
+            )
+            .expect("Failed to register partials/navbar.html");
+        jinja
+            .add_template(
+                "partials/footer.html",
+                include_str!("../templates/partials/footer.html"),
+            )
+            .expect("Failed to register partials/footer.html");
+        jinja
+            .add_template(
+                "auth/login.html",
+                include_str!("../templates/auth/login.html"),
+            )
+            .expect("Failed to register auth/login.html");
+        jinja
+            .add_template(
+                "auth/register.html",
+                include_str!("../templates/auth/register.html"),
+            )
+            .expect("Failed to register auth/register.html");
+        jinja
+            .add_template(
+                "error/csrf.html",
+                include_str!("../templates/error/csrf.html"),
+            )
+            .expect("Failed to register error/csrf.html");
+        jinja
+            .add_template(
+                "error/403.html",
+                include_str!("../templates/error/403.html"),
+            )
+            .expect("Failed to register error/403.html");
+
         Self {
             db,
             jinja: Arc::new(jinja),
