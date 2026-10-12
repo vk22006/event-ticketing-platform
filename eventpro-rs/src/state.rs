@@ -17,8 +17,13 @@ impl AppState {
         // Register formatting filters needed for EventPro templates
         jinja.add_filter("inr", filter_inr);
         jinja.add_filter("date_in", filter_date_in);
+        jinja.add_filter("date_short", filter_date_short);
+        jinja.add_filter("date_long", filter_date_long);
+        jinja.add_filter("time_format", filter_time_format);
+        jinja.add_filter("date_deadline", filter_date_deadline);
+        jinja.add_filter("round", filter_round);
 
-        // Register core Phase 2 templates
+        // Register core templates
         jinja
             .add_template(
                 "partials/navbar.html",
@@ -55,6 +60,27 @@ impl AppState {
                 include_str!("../templates/error/403.html"),
             )
             .expect("Failed to register error/403.html");
+        jinja
+            .add_template("index.html", include_str!("../templates/index.html"))
+            .expect("Failed to register index.html");
+        jinja
+            .add_template(
+                "event-detail.html",
+                include_str!("../templates/event-detail.html"),
+            )
+            .expect("Failed to register event-detail.html");
+        jinja
+            .add_template(
+                "error/404.html",
+                include_str!("../templates/error/404.html"),
+            )
+            .expect("Failed to register error/404.html");
+        jinja
+            .add_template(
+                "error/500.html",
+                include_str!("../templates/error/500.html"),
+            )
+            .expect("Failed to register error/500.html");
 
         Self {
             db,
@@ -72,11 +98,63 @@ fn filter_inr(value: Value) -> Result<String, minijinja::Error> {
         }
         Ok(format!("₹{:.2}", num))
     } else {
-        Ok(format!("₹{}", value))
+        let s = value.to_string();
+        if s == "0" || s == "0.00" {
+            Ok("Free".to_string())
+        } else {
+            Ok(format!("₹{}", s))
+        }
     }
 }
 
 // Date formatter filter
 fn filter_date_in(value: Value) -> Result<String, minijinja::Error> {
-    Ok(value.to_string())
+    filter_date_short(value)
+}
+
+fn parse_datetime_val(value: &Value) -> Option<chrono::NaiveDateTime> {
+    let s = value.as_str()?;
+    chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))
+        .ok()
+}
+
+fn filter_date_short(value: Value) -> Result<String, minijinja::Error> {
+    if let Some(dt) = parse_datetime_val(&value) {
+        Ok(dt.format("%a, %d %b %Y").to_string())
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+fn filter_date_long(value: Value) -> Result<String, minijinja::Error> {
+    if let Some(dt) = parse_datetime_val(&value) {
+        Ok(dt.format("%A, %d %B %Y").to_string())
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+fn filter_time_format(value: Value) -> Result<String, minijinja::Error> {
+    if let Some(dt) = parse_datetime_val(&value) {
+        Ok(dt.format("%I:%M %p").to_string())
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+fn filter_date_deadline(value: Value) -> Result<String, minijinja::Error> {
+    if let Some(dt) = parse_datetime_val(&value) {
+        Ok(dt.format("%d/%m/%Y").to_string())
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+fn filter_round(value: Value) -> Result<i64, minijinja::Error> {
+    if let Ok(num) = f64::try_from(value) {
+        Ok(num.round() as i64)
+    } else {
+        Ok(0)
+    }
 }
