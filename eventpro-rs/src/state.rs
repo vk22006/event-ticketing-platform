@@ -21,6 +21,8 @@ impl AppState {
         jinja.add_filter("date_long", filter_date_long);
         jinja.add_filter("time_format", filter_time_format);
         jinja.add_filter("date_deadline", filter_date_deadline);
+        jinja.add_filter("datetime_local", filter_datetime_local);
+        jinja.add_filter("initial", filter_initial);
         jinja.add_filter("round", filter_round);
 
         // Register core templates
@@ -81,6 +83,36 @@ impl AppState {
                 include_str!("../templates/error/500.html"),
             )
             .expect("Failed to register error/500.html");
+        jinja
+            .add_template(
+                "dashboard/_sidebar.html",
+                include_str!("../templates/dashboard/_sidebar.html"),
+            )
+            .expect("Failed to register dashboard/_sidebar.html");
+        jinja
+            .add_template(
+                "dashboard/home.html",
+                include_str!("../templates/dashboard/home.html"),
+            )
+            .expect("Failed to register dashboard/home.html");
+        jinja
+            .add_template(
+                "dashboard/create-event.html",
+                include_str!("../templates/dashboard/create-event.html"),
+            )
+            .expect("Failed to register dashboard/create-event.html");
+        jinja
+            .add_template(
+                "dashboard/edit-event.html",
+                include_str!("../templates/dashboard/edit-event.html"),
+            )
+            .expect("Failed to register dashboard/edit-event.html");
+        jinja
+            .add_template(
+                "dashboard/admin.html",
+                include_str!("../templates/dashboard/admin.html"),
+            )
+            .expect("Failed to register dashboard/admin.html");
 
         Self {
             db,
@@ -157,4 +189,17 @@ fn filter_round(value: Value) -> Result<i64, minijinja::Error> {
     } else {
         Ok(0)
     }
+}
+
+fn filter_datetime_local(value: Value) -> Result<String, minijinja::Error> {
+    if let Some(dt) = parse_datetime_val(&value) {
+        Ok(dt.format("%Y-%m-%dT%H:%M").to_string())
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+fn filter_initial(value: Value) -> Result<String, minijinja::Error> {
+    let s = value.as_str().unwrap_or("");
+    Ok(s.chars().next().unwrap_or('?').to_uppercase().to_string())
 }
