@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod events;
 pub mod health;
 
 use crate::state::AppState;
@@ -33,6 +34,9 @@ where
         .route("/logout", get(auth::logout));
 
     let mut router = Router::new()
+        .route("/", get(events::root_redirect))
+        .route("/events", get(events::list_events))
+        .route("/events/:id", get(events::show_event))
         .route("/health", get(health::liveness))
         .route("/ready", get(health::readiness))
         .nest("/auth", auth_routes)
