@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title | default("Dashboard") }} – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+    {% include "partials/navbar.html" %}
+
+    <div class="container">
+        <div class="dashboard-layout">
+
+            <!-- Sidebar -->
+            {% include "dashboard/_sidebar.html" %}
+
+            <!-- Main content -->
+            <div>
+                <div class="flex-between mb-4">
+                    <div>
+                        <h1 style="font-size:1.6rem;">Dashboard</h1>
+                        <p class="text-muted text-sm">Welcome back, {{ user.full_name }} 👋</p>
+                    </div>
+                    {% if user.role == "organizer" or user.role == "admin" %}
+                        <a href="/events/create" class="btn btn-primary">+ Create Event</a>
+                    {% else %}
+                        <a href="/events" class="btn btn-primary">Browse Events 🎫</a>
+                    {% endif %}
+                </div>
+
+                {% if user.role == "organizer" or user.role == "admin" %}
+                    <!-- ORGANIZER / ADMIN VIEW -->
+                    {% if events | length == 0 %}
+                        <div class="empty-state">
+                            <div class="empty-state__icon">🎉</div>
+                            <h3>No events yet</h3>
+                            <p>Create your first event to get started</p>
+                            <a href="/events/create" class="btn btn-primary mt-3">Create Event</a>
+                        </div>
+                    {% else %}
+                        <div class="table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Event</th>
+                                        <th>Date</th>
+                                        <th>Seats</th>
+                                        <th>Price</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for evt in events %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ evt.title }}</strong><br />
+                                                <span class="text-muted text-sm">📍 {{ evt.city | default('TBA') }}</span>
+                                            </td>
+                                            <td class="text-sm">
+                                                {{ evt.event_date | date_in }}
+                                            </td>
+                                            <td class="text-sm">
+                                                {{ evt.available_seats }} / {{ evt.total_seats }}
+                                            </td>
+                                            <td class="text-sm">
+                                                {% if evt.ticket_price == 0 %}
+                                                    <span class="badge badge-green">Free</span>
+                                                {% else %}
+                                                    {{ evt.ticket_price | inr }}
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <span class="badge {% if evt.status == 'published' %}badge-green{% elif evt.status == 'cancelled' %}badge-rose{% else %}badge-grey{% endif %}">
+                                                    {{ evt.status }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;">
+                                                    <a href="/events/{{ evt.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
+                                                    <form action="/events/{{ evt.id }}/toggle-status" method="POST" style="display:inline;margin:0;">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                                        <button type="submit" class="btn btn-sm {% if evt.status == 'published' %}btn-danger{% else %}btn-success{% endif %}">
+                                                            {% if evt.status == "published" %}Unpublish{% else %}Publish{% endif %}
+                                                        </button>
+                                                    </form>
+                                                    <form action="/events/{{ evt.id }}/delete" method="POST" style="display:inline;margin:0;" onsubmit="return confirm('Delete this event?');">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+
+                {% else %}
+                    <!-- ATTENDEE VIEW -->
+                    {% if bookings | length == 0 %}
+                        <div class="empty-state">
+                            <div class="empty-state__icon">🎟️</div>
+                            <h3>No bookings yet</h3>
+                            <p>Discover and book your first event!</p>
+                            <a href="/events" class="btn btn-primary mt-3">Browse Events</a>
+                        </div>
+                    {% else %}
+                        <div class="events-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr));">
+                            {% for b in bookings %}
+                                <div class="card">
+                                    <div class="card__image" style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--bg-subtle);">
+                                        {% if b.banner_image %}
+                                            <img src="{{ b.banner_image }}" style="width:100%;height:120px;object-fit:cover;" alt="{{ b.event_title }}" />
+                                        {% else %}
+                                            <span style="font-size:2.5rem;">🎫</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="card__body">
+                                        <h3 class="card__title" style="font-size:0.95rem;">
+                                            {{ b.event_title }}
+                                        </h3>
+                                        <p class="text-sm text-muted">
+                                            📅 {{ b.event_date | date_in }}
+                                        </p>
+                                        <p class="text-sm text-muted">
+                                            📍 {% if b.venue %}{{ b.venue }}, {% endif %}{{ b.city | default('') }}
+                                        </p>
+                                        <div class="flex gap-1 mt-2" style="flex-wrap:wrap;">
+                                            <span class="badge {% if b.status == 'confirmed' %}badge-green{% elif b.status == 'cancelled' %}badge-rose{% else %}badge-grey{% endif %}">
+                                                {{ b.status }}
+                                            </span>
+                                            <span class="badge badge-purple">{{ b.total_amount | inr }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="card__footer">
+                                        <a href="/events/{{ b.event_id }}" class="btn btn-ghost btn-sm">View Event</a>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+
+    {% include "partials/footer.html" %}
+    <script src="/js/main.js"></script>
+</body>
+
+</html>
