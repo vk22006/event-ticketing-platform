@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title | default("Create Event") }} – EventPro</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+    {% include "partials/navbar.html" %}
+
+    <div class="container">
+        <div class="dashboard-layout">
+            {% include "dashboard/_sidebar.html" %}
+
+            <div>
+                <div class="flex-between mb-4">
+                    <h1 style="font-size:1.6rem;">Create New Event</h1>
+                    <a href="/dashboard" class="btn btn-ghost btn-sm">← Back</a>
+                </div>
+
+                {% if error %}
+                    <div class="alert alert-error">⚠️ {{ error }}</div>
+                {% endif %}
+
+                <form action="/events/create" method="POST" class="card" style="padding:2rem;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+                    <div class="form-group">
+                        <label class="form-label">Event Title <span style="color:var(--rose)">*</span></label>
+                        <input type="text" name="title" class="form-control" placeholder="e.g. TechCon 2025" value="{% if form and form.title %}{{ form.title }}{% endif %}" required />
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Category</label>
+                            <select name="category_id" class="form-control">
+                                <option value="">Select Category</option>
+                                {% for cat in categories %}
+                                    <option value="{{ cat.id }}" {% if form and form.category_id and form.category_id == cat.id %}selected{% endif %}>
+                                        {{ cat.icon | default('🎫') }} {{ cat.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-control">
+                                <option value="draft" {% if form and form.status == 'draft' %}selected{% endif %}>Draft (Save, not publish)</option>
+                                <option value="published" {% if form and form.status == 'published' %}selected{% endif %}>Published (Live immediately)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" placeholder="Tell attendees about your event...">{% if form and form.description %}{{ form.description }}{% endif %}</textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Venue</label>
+                            <input type="text" name="venue" class="form-control" placeholder="e.g. IIIT Auditorium" value="{% if form and form.venue %}{{ form.venue }}{% endif %}" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">City</label>
+                            <input type="text" name="city" class="form-control" placeholder="e.g. Hyderabad" value="{% if form and form.city %}{{ form.city }}{% endif %}" />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Event Date & Time <span style="color:var(--rose)">*</span></label>
+                            <input type="datetime-local" name="event_date" class="form-control" value="{% if form and form.event_date %}{{ form.event_date }}{% endif %}" required />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Registration Deadline</label>
+                            <input type="datetime-local" name="registration_deadline" class="form-control" value="{% if form and form.registration_deadline %}{{ form.registration_deadline }}{% endif %}" />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Total Seats <span style="color:var(--rose)">*</span></label>
+                            <input type="number" name="total_seats" class="form-control" placeholder="100" min="1" value="{% if form and form.total_seats %}{{ form.total_seats }}{% else %}100{% endif %}" required />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ticket Price (₹)</label>
+                            <input type="number" name="ticket_price" class="form-control" placeholder="0 for free" min="0" step="0.01" value="{% if form and form.ticket_price %}{{ form.ticket_price }}{% else %}0{% endif %}" />
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Event Banner Image</label>
+                        <p class="text-sm text-muted">File uploads are deferred to the uploads phase. Default category icon will be used.</p>
+                    </div>
+
+                    <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:0.5rem;">
+                        <a href="/dashboard" class="btn btn-ghost">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Create Event 🚀</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {% include "partials/footer.html" %}
+    <script src="/js/main.js"></script>
+</body>
+
+</html>
