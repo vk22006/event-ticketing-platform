@@ -1,9 +1,14 @@
+pub mod admin;
 pub mod auth;
+pub mod dashboard;
 pub mod events;
 pub mod health;
 
 use crate::state::AppState;
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
@@ -36,7 +41,19 @@ where
     let mut router = Router::new()
         .route("/", get(events::root_redirect))
         .route("/events", get(events::list_events))
+        .route(
+            "/events/create",
+            get(events::show_create).post(events::create_event),
+        )
         .route("/events/:id", get(events::show_event))
+        .route(
+            "/events/:id/edit",
+            get(events::show_edit).post(events::update_event),
+        )
+        .route("/events/:id/toggle-status", post(events::toggle_status))
+        .route("/events/:id/delete", post(events::delete_event))
+        .route("/dashboard", get(dashboard::show_dashboard))
+        .route("/admin/dashboard", get(admin::admin_dashboard))
         .route("/health", get(health::liveness))
         .route("/ready", get(health::readiness))
         .nest("/auth", auth_routes)
