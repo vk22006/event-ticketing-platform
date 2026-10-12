@@ -64,4 +64,29 @@ impl User {
     pub fn hash_password(plain: &str) -> Result<String, bcrypt::BcryptError> {
         bcrypt::hash(plain, 10)
     }
+
+    /// Retrieve all users ordered by creation date descending
+    pub async fn find_all(pool: &MySqlPool) -> Result<Vec<User>, sqlx::Error> {
+        sqlx::query_as::<_, User>(
+            "SELECT id, full_name, email, password, role, avatar, bio, created_at, updated_at FROM users ORDER BY created_at DESC"
+        )
+        .fetch_all(pool)
+        .await
+    }
+
+    /// Count users grouped by role for admin platform overview
+    pub async fn count_by_role(
+        pool: &MySqlPool,
+    ) -> Result<std::collections::HashMap<String, i64>, sqlx::Error> {
+        let rows: Vec<(String, i64)> =
+            sqlx::query_as("SELECT role, COUNT(*) AS total FROM users GROUP BY role")
+                .fetch_all(pool)
+                .await?;
+
+        let mut map = std::collections::HashMap::new();
+        for (role, count) in rows {
+            map.insert(role, count);
+        }
+        Ok(map)
+    }
 }
