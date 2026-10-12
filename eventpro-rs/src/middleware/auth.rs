@@ -51,7 +51,7 @@ pub struct OptionalUser(pub Option<User>);
 
 #[async_trait]
 impl FromRequestParts<AppState> for OptionalUser {
-    type Rejection = std::convert::Infallible;
+    type Rejection = Response;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -65,12 +65,25 @@ impl FromRequestParts<AppState> for OptionalUser {
         let user_id = get_session_user_id(session).await;
 
         if let Some(id) = user_id {
-            if let Ok(Some(user)) = User::find_by_id(&state.db, id).await {
-                return Ok(OptionalUser(Some(user)));
+            match User::find_by_id(&state.db, id).await {
+                Ok(Some(user)) => Ok(OptionalUser(Some(user))),
+                Ok(None) => {
+                    // Stale session pointing to deleted user
+                    let _ = session.flush().await;
+                    Ok(OptionalUser(None))
+                }
+                Err(err) => {
+                    tracing::error!(
+                        error = %err,
+                        user_id = id,
+                        "Database lookup failed in OptionalUser extractor"
+                    );
+                    Err(AppError::Database(err).into_response())
+                }
             }
+        } else {
+            Ok(OptionalUser(None))
         }
-
-        Ok(OptionalUser(None))
     }
 }
 
