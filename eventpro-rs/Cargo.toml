@@ -11,7 +11,7 @@ tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
 tower-sessions = "0.13"
 tower-sessions-sqlx-store = { version = "0.14", features = ["mysql"] }
 time = "0.3"
-sqlx = { version = "0.8", features = ["runtime-tokio", "mysql", "chrono", "macros"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "mysql", "chrono", "macros", "rust_decimal"] }
 minijinja = { version = "2", features = ["loader"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -24,6 +24,7 @@ percent-encoding = "2.3"
 bcrypt = "0.17"
 rand = "0.8"
 subtle = "2.6"
+rust_decimal = { version = "1", features = ["serde"] }
 
 [profile.dev]
 codegen-units = 1
