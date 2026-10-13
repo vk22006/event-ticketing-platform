@@ -213,8 +213,8 @@ async fn test_event_detail_rendering() {
         })
         .expect("rendering should succeed");
 
-    assert!(attendee_rendered.contains("Booking Available Soon"));
-    assert!(!attendee_rendered.contains("/bookings/book/"));
+    assert!(attendee_rendered.contains("Book Now"));
+    assert!(attendee_rendered.contains(&format!("/bookings/book/{}", event.id)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
