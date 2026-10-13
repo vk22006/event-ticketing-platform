@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title | default("My Bookings – EventPro") }}</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+    {% include "partials/navbar.html" %}
+
+    <div class="container">
+        <div class="dashboard-layout">
+            {% include "dashboard/_sidebar.html" %}
+
+            <div>
+                <div class="flex-between mb-4">
+                    <h1 style="font-size:1.6rem;">My Bookings 📋</h1>
+                    <a href="/events" class="btn btn-primary btn-sm">Browse Events</a>
+                </div>
+
+                {% if message %}
+                    <div class="alert alert-success mb-3">✅ {{ message }}</div>
+                {% endif %}
+                {% if error %}
+                    <div class="alert alert-error mb-3">⚠️ {{ error }}</div>
+                {% endif %}
+
+                {% if bookings | length == 0 %}
+                    <div class="empty-state">
+                        <div class="empty-state__icon">📋</div>
+                        <h3>No bookings yet</h3>
+                        <p>Discover and book your first event!</p>
+                        <a href="/events" class="btn btn-primary mt-3">Browse Events</a>
+                    </div>
+                {% else %}
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Event</th>
+                                    <th>Date</th>
+                                    <th>Tickets</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for b in bookings %}
+                                    <tr>
+                                        <td class="text-muted text-sm">#{{ b.id }}</td>
+                                        <td>
+                                            <strong>{{ b.event_title }}</strong><br />
+                                            <span class="text-muted text-sm">📍 {{ b.venue if b.venue else '' }} {{ b.city if b.city else '' }}</span>
+                                        </td>
+                                        <td class="text-sm">
+                                            {{ b.event_date | date_short }}
+                                        </td>
+                                        <td class="text-sm">
+                                            {{ b.quantity }}
+                                        </td>
+                                        <td class="text-sm text-green">
+                                            {{ b.total_amount | inr }}
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if b.status == 'confirmed' %}badge-green{% elif b.status == 'cancelled' %}badge-rose{% else %}badge-grey{% endif %}">
+                                                {{ b.status }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if b.status == 'confirmed' %}
+                                                <form action="/bookings/{{ b.id }}/cancel" method="POST"
+                                                    onsubmit="return confirm('Cancel this booking?')">
+                                                    {% if csrf_token %}
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                                    {% endif %}
+                                                    <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+                                                </form>
+                                            {% else %}
+                                                <span class="text-muted text-sm">—</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% include "partials/footer.html" %}
+    <script src="/js/main.js"></script>
+</body>
+
+</html>
