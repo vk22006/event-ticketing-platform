@@ -24,4 +24,14 @@ impl SeatType {
         .fetch_all(pool)
         .await
     }
+
+    /// Retrieve a specific seat tier by ID
+    pub async fn find_by_id(pool: &MySqlPool, id: i32) -> Result<Option<SeatType>, sqlx::Error> {
+        sqlx::query_as::<_, SeatType>(
+            "SELECT id, event_id, type_name, price, total_seats, booked_seats FROM seat_types WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+    }
 }
