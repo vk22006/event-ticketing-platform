@@ -1,8 +1,10 @@
 pub mod admin;
 pub mod auth;
+pub mod bookings;
 pub mod dashboard;
 pub mod events;
 pub mod health;
+pub mod tickets;
 
 use crate::state::AppState;
 use axum::{
@@ -52,6 +54,15 @@ where
         )
         .route("/events/:id/toggle-status", post(events::toggle_status))
         .route("/events/:id/delete", post(events::delete_event))
+        .route("/bookings/book/:id", get(bookings::show_booking_form))
+        .route("/bookings/payment", get(bookings::show_payment))
+        .route("/bookings/confirm", post(bookings::confirm_booking))
+        .route("/bookings/my", get(bookings::my_bookings))
+        .route("/bookings/:id/cancel", post(bookings::cancel_booking))
+        .route("/bookings/cancel/:id", post(bookings::cancel_booking))
+        .route("/tickets/my", get(tickets::my_tickets))
+        .route("/tickets/:id", get(tickets::view_ticket))
+        .route("/tickets/:id/print", get(tickets::print_ticket))
         .route("/dashboard", get(dashboard::show_dashboard))
         .route("/admin/dashboard", get(admin::admin_dashboard))
         .route("/health", get(health::liveness))
