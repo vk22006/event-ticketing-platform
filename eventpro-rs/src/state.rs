@@ -113,6 +113,48 @@ impl AppState {
                 include_str!("../templates/dashboard/admin.html"),
             )
             .expect("Failed to register dashboard/admin.html");
+        jinja
+            .add_template(
+                "booking/select.html",
+                include_str!("../templates/booking/select.html"),
+            )
+            .expect("Failed to register booking/select.html");
+        jinja
+            .add_template(
+                "booking/payment.html",
+                include_str!("../templates/booking/payment.html"),
+            )
+            .expect("Failed to register booking/payment.html");
+        jinja
+            .add_template(
+                "booking/confirmation.html",
+                include_str!("../templates/booking/confirmation.html"),
+            )
+            .expect("Failed to register booking/confirmation.html");
+        jinja
+            .add_template(
+                "dashboard/my-bookings.html",
+                include_str!("../templates/dashboard/my-bookings.html"),
+            )
+            .expect("Failed to register dashboard/my-bookings.html");
+        jinja
+            .add_template(
+                "dashboard/my-tickets.html",
+                include_str!("../templates/dashboard/my-tickets.html"),
+            )
+            .expect("Failed to register dashboard/my-tickets.html");
+        jinja
+            .add_template(
+                "ticket/view.html",
+                include_str!("../templates/ticket/view.html"),
+            )
+            .expect("Failed to register ticket/view.html");
+        jinja
+            .add_template(
+                "ticket/print.html",
+                include_str!("../templates/ticket/print.html"),
+            )
+            .expect("Failed to register ticket/print.html");
 
         Self {
             db,
