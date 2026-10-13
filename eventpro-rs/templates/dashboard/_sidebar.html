@@ -29,7 +29,8 @@
         {% endif %}
 
         {% if user and user.role != 'organizer' and user.role != 'admin' %}
-            <li><a href="/dashboard" class="{% if title and 'Booking' in title %}active{% endif %}">📋 My Bookings</a></li>
+            <li><a href="/bookings/my" class="{% if title and 'Booking' in title %}active{% endif %}">📋 My Bookings</a></li>
+            <li><a href="/tickets/my" class="{% if title and 'Ticket' in title %}active{% endif %}">🎟️ My Tickets</a></li>
         {% endif %}
 
         <li><a href="/events">🌍 Browse Events</a></li>
