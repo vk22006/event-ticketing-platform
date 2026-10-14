@@ -5,9 +5,10 @@ use crate::{
         Category, CreateEventParams, Event, EventFilterParams, SeatType, UpdateEventParams, User,
     },
     state::AppState,
+    upload,
 };
 use axum::{
-    extract::{Form, Path, Query, State},
+    extract::{Form, FromRequest, Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
@@ -36,6 +37,72 @@ pub struct EventFormData {
     pub status: Option<String>,
     // Client-supplied organizer_id is ignored to prevent privilege escalation
     pub organizer_id: Option<String>,
+}
+
+impl EventFormData {
+    pub fn from_map(mut map: std::collections::HashMap<String, String>) -> Self {
+        Self {
+            csrf_token: map.remove("csrf_token"),
+            title: map.remove("title"),
+            description: map.remove("description"),
+            venue: map.remove("venue"),
+            city: map.remove("city"),
+            event_date: map.remove("event_date"),
+            registration_deadline: map.remove("registration_deadline"),
+            total_seats: map.remove("total_seats"),
+            ticket_price: map.remove("ticket_price"),
+            category_id: map.remove("category_id"),
+            status: map.remove("status"),
+            organizer_id: None,
+        }
+    }
+}
+
+async fn cleanup_banner_file(banner: &Option<(String, std::path::PathBuf)>) {
+    if let Some((_, ref path)) = banner {
+        let _ = tokio::fs::remove_file(path).await;
+    }
+}
+
+async fn parse_event_request(
+    state: &AppState,
+    request: axum::extract::Request,
+) -> Result<(EventFormData, Option<(String, std::path::PathBuf)>), (EventFormData, String)> {
+    let content_type = request
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    if content_type.starts_with("multipart/form-data") {
+        let multipart = match axum::extract::Multipart::from_request(request, state).await {
+            Ok(m) => m,
+            Err(err) => {
+                tracing::warn!(error = %err, "Failed to parse multipart request");
+                return Err((
+                    EventFormData::default(),
+                    "Failed to process form submission. Please check your inputs.".to_string(),
+                ));
+            }
+        };
+
+        match upload::parse_multipart_form(multipart, &state.config.upload_dir).await {
+            Ok(parsed) => Ok((EventFormData::from_map(parsed.fields), parsed.banner)),
+            Err(upload_err) => Err((EventFormData::default(), upload_err.to_string())),
+        }
+    } else {
+        match Form::<EventFormData>::from_request(request, state).await {
+            Ok(Form(f)) => Ok((f, None)),
+            Err(err) => {
+                tracing::warn!(error = %err, "Failed to deserialize URL-encoded form");
+                Err((
+                    EventFormData::default(),
+                    "Invalid form data received.".to_string(),
+                ))
+            }
+        }
+    }
 }
 
 #[derive(Debug, serde::Deserialize, Default)]
@@ -241,15 +308,23 @@ pub async fn create_event(
     user: AuthenticatedUser,
     session: Session,
     State(state): State<AppState>,
-    Form(form): Form<EventFormData>,
+    request: axum::extract::Request,
 ) -> Response {
     let current_user = user.0;
     if current_user.role != "organizer" && current_user.role != "admin" {
         return forbidden_response(&state.jinja, None);
     }
 
+    let (form, banner) = match parse_event_request(&state, request).await {
+        Ok(res) => res,
+        Err((form, err_msg)) => {
+            return render_create_error(&state, &session, &current_user, &form, &err_msg).await;
+        }
+    };
+
     let token = form.csrf_token.as_deref().unwrap_or("");
     if !validate_csrf_token(&session, token).await {
+        cleanup_banner_file(&banner).await;
         return csrf_error_response(&state.jinja);
     }
 
@@ -261,6 +336,7 @@ pub async fn create_event(
     {
         Some(t) if t.len() <= 255 => t.to_string(),
         Some(_) => {
+            cleanup_banner_file(&banner).await;
             return render_create_error(
                 &state,
                 &session,
@@ -271,6 +347,7 @@ pub async fn create_event(
             .await;
         }
         None => {
+            cleanup_banner_file(&banner).await;
             return render_create_error(
                 &state,
                 &session,
@@ -285,6 +362,7 @@ pub async fn create_event(
     let event_date = match form.event_date.as_deref().and_then(parse_datetime) {
         Some(dt) => dt,
         None => {
+            cleanup_banner_file(&banner).await;
             return render_create_error(
                 &state,
                 &session,
@@ -303,6 +381,7 @@ pub async fn create_event(
     {
         Some(seats) if seats > 0 => seats,
         _ => {
+            cleanup_banner_file(&banner).await;
             return render_create_error(
                 &state,
                 &session,
@@ -318,6 +397,7 @@ pub async fn create_event(
         Some(s) if !s.trim().is_empty() => match parse_datetime(s) {
             Some(dt) => {
                 if dt > event_date {
+                    cleanup_banner_file(&banner).await;
                     return render_create_error(
                         &state,
                         &session,
@@ -330,6 +410,7 @@ pub async fn create_event(
                 Some(dt)
             }
             None => {
+                cleanup_banner_file(&banner).await;
                 return render_create_error(
                     &state,
                     &session,
@@ -347,6 +428,7 @@ pub async fn create_event(
         Some(s) if !s.trim().is_empty() => match s.trim().parse::<rust_decimal::Decimal>() {
             Ok(price) if price >= rust_decimal::Decimal::ZERO => price,
             _ => {
+                cleanup_banner_file(&banner).await;
                 return render_create_error(
                     &state,
                     &session,
@@ -365,6 +447,7 @@ pub async fn create_event(
             Ok(cat_id) => match Category::find_by_id(&state.db, cat_id).await {
                 Ok(Some(_)) => Some(cat_id),
                 Ok(None) => {
+                    cleanup_banner_file(&banner).await;
                     return render_create_error(
                         &state,
                         &session,
@@ -375,11 +458,13 @@ pub async fn create_event(
                     .await;
                 }
                 Err(err) => {
+                    cleanup_banner_file(&banner).await;
                     tracing::error!(error = %err, "Database error validating category");
                     return render_500(&state, Some(current_user));
                 }
             },
             Err(_) => {
+                cleanup_banner_file(&banner).await;
                 return render_create_error(
                     &state,
                     &session,
@@ -417,6 +502,8 @@ pub async fn create_event(
         .filter(|s| !s.is_empty())
         .map(String::from);
 
+    let banner_image = banner.as_ref().map(|(url, _)| url.clone());
+
     let params = CreateEventParams {
         category_id,
         title,
@@ -428,12 +515,13 @@ pub async fn create_event(
         total_seats,
         ticket_price,
         status,
-        banner_image: None,
+        banner_image,
     };
 
     match Event::create(&state.db, current_user.id, &params).await {
         Ok(_) => Redirect::to("/dashboard").into_response(),
         Err(err) => {
+            cleanup_banner_file(&banner).await;
             tracing::error!(error = %err, user_id = current_user.id, "Failed to create event");
             render_500(&state, Some(current_user))
         }
@@ -502,16 +590,11 @@ pub async fn update_event(
     session: Session,
     State(state): State<AppState>,
     Path(id_str): Path<String>,
-    Form(form): Form<EventFormData>,
+    request: axum::extract::Request,
 ) -> Response {
     let current_user = user.0;
     if current_user.role != "organizer" && current_user.role != "admin" {
         return forbidden_response(&state.jinja, None);
-    }
-
-    let token = form.csrf_token.as_deref().unwrap_or("");
-    if !validate_csrf_token(&session, token).await {
-        return csrf_error_response(&state.jinja);
     }
 
     let event_id = match id_str.trim().parse::<i32>() {
@@ -535,6 +618,19 @@ pub async fn update_event(
         );
     }
 
+    let (form, banner) = match parse_event_request(&state, request).await {
+        Ok(res) => res,
+        Err((_, err_msg)) => {
+            return render_edit_error(&state, &session, &current_user, &event, &err_msg).await;
+        }
+    };
+
+    let token = form.csrf_token.as_deref().unwrap_or("");
+    if !validate_csrf_token(&session, token).await {
+        cleanup_banner_file(&banner).await;
+        return csrf_error_response(&state.jinja);
+    }
+
     let title = match form
         .title
         .as_deref()
@@ -543,6 +639,7 @@ pub async fn update_event(
     {
         Some(t) if t.len() <= 255 => t.to_string(),
         Some(_) => {
+            cleanup_banner_file(&banner).await;
             return render_edit_error(
                 &state,
                 &session,
@@ -553,6 +650,7 @@ pub async fn update_event(
             .await;
         }
         None => {
+            cleanup_banner_file(&banner).await;
             return render_edit_error(
                 &state,
                 &session,
@@ -567,6 +665,7 @@ pub async fn update_event(
     let event_date = match form.event_date.as_deref().and_then(parse_datetime) {
         Some(dt) => dt,
         None => {
+            cleanup_banner_file(&banner).await;
             return render_edit_error(
                 &state,
                 &session,
@@ -585,6 +684,7 @@ pub async fn update_event(
     {
         Some(seats) if seats > 0 => seats,
         _ => {
+            cleanup_banner_file(&banner).await;
             return render_edit_error(
                 &state,
                 &session,
@@ -600,6 +700,7 @@ pub async fn update_event(
         Some(s) if !s.trim().is_empty() => match parse_datetime(s) {
             Some(dt) => {
                 if dt > event_date {
+                    cleanup_banner_file(&banner).await;
                     return render_edit_error(
                         &state,
                         &session,
@@ -612,6 +713,7 @@ pub async fn update_event(
                 Some(dt)
             }
             None => {
+                cleanup_banner_file(&banner).await;
                 return render_edit_error(
                     &state,
                     &session,
@@ -629,6 +731,7 @@ pub async fn update_event(
         Some(s) if !s.trim().is_empty() => match s.trim().parse::<rust_decimal::Decimal>() {
             Ok(price) if price >= rust_decimal::Decimal::ZERO => price,
             _ => {
+                cleanup_banner_file(&banner).await;
                 return render_edit_error(
                     &state,
                     &session,
@@ -647,6 +750,7 @@ pub async fn update_event(
             Ok(cat_id) => match Category::find_by_id(&state.db, cat_id).await {
                 Ok(Some(_)) => Some(cat_id),
                 Ok(None) => {
+                    cleanup_banner_file(&banner).await;
                     return render_edit_error(
                         &state,
                         &session,
@@ -657,11 +761,13 @@ pub async fn update_event(
                     .await;
                 }
                 Err(err) => {
+                    cleanup_banner_file(&banner).await;
                     tracing::error!(error = %err, "Database error validating category");
                     return render_500(&state, Some(current_user));
                 }
             },
             Err(_) => {
+                cleanup_banner_file(&banner).await;
                 return render_edit_error(
                     &state,
                     &session,
@@ -699,6 +805,13 @@ pub async fn update_event(
         .filter(|s| !s.is_empty())
         .map(String::from);
 
+    let old_banner = event.banner_image.clone();
+    let new_banner_uploaded = banner.is_some();
+    let banner_image = banner
+        .as_ref()
+        .map(|(url, _)| url.clone())
+        .or_else(|| event.banner_image.clone());
+
     let params = UpdateEventParams {
         category_id,
         title,
@@ -710,12 +823,20 @@ pub async fn update_event(
         total_seats,
         ticket_price,
         status,
-        banner_image: event.banner_image.clone(),
+        banner_image,
     };
 
     match Event::update(&state.db, event_id, &params).await {
-        Ok(_) => Redirect::to("/dashboard").into_response(),
+        Ok(_) => {
+            if new_banner_uploaded {
+                if let Some(ref old_url) = old_banner {
+                    upload::remove_banner_file(&state.config.upload_dir, old_url).await;
+                }
+            }
+            Redirect::to("/dashboard").into_response()
+        }
         Err(err) => {
+            cleanup_banner_file(&banner).await;
             tracing::error!(error = %err, event_id = event_id, "Failed to update event in database");
             render_500(&state, Some(current_user))
         }
