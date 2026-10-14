@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf};
 /// Maximum allowed file size for event banner uploads (5 MB).
 pub const MAX_BANNER_SIZE: usize = 5 * 1024 * 1024;
 
+/// Maximum allowed size for non-banner text form fields (64 KB).
+pub const MAX_TEXT_FIELD_SIZE: usize = 64 * 1024;
+
 /// Permitted image MIME types and formats.
 pub const ALLOWED_FORMATS_DESC: &str = "JPEG, PNG, WebP, and GIF";
 
@@ -61,6 +64,8 @@ impl AllowedImageFormat {
 pub enum UploadError {
     #[error("Uploaded file exceeds the maximum allowed size of 5 MB.")]
     FileTooLarge,
+    #[error("Form field exceeds the maximum allowed size of 64 KB.")]
+    FieldTooLarge,
     #[error(
         "Invalid or unsupported image format. Only JPEG, PNG, WebP, and GIF images are allowed."
     )]
@@ -165,7 +170,13 @@ pub async fn parse_multipart_form(
     let res: Result<(), UploadError> = async {
         while let Some(mut field) = multipart.next_field().await.map_err(|err| {
             tracing::warn!(error = %err, "Error reading multipart field");
-            UploadError::StreamError
+            if err.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE
+                || err.to_string().to_lowercase().contains("limit")
+            {
+                UploadError::FileTooLarge
+            } else {
+                UploadError::StreamError
+            }
         })? {
             let name = field.name().unwrap_or("").to_string();
             if name == "banner_image" {
@@ -175,7 +186,13 @@ pub async fn parse_multipart_form(
 
                 while let Some(chunk) = field.chunk().await.map_err(|err| {
                     tracing::warn!(error = %err, "Error reading multipart file chunk");
-                    UploadError::StreamError
+                    if err.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE
+                        || err.to_string().to_lowercase().contains("limit")
+                    {
+                        UploadError::FileTooLarge
+                    } else {
+                        UploadError::StreamError
+                    }
                 })? {
                     if data.len() + chunk.len() > MAX_BANNER_SIZE {
                         exceeded = true;
@@ -200,10 +217,20 @@ pub async fn parse_multipart_form(
                 }
             } else if !name.is_empty() {
                 let mut text_bytes = Vec::new();
-                while let Some(chunk) = field.chunk().await.map_err(|_| UploadError::StreamError)? {
-                    if text_bytes.len() + chunk.len() <= 64 * 1024 {
-                        text_bytes.extend_from_slice(&chunk);
+                while let Some(chunk) = field.chunk().await.map_err(|err| {
+                    tracing::warn!(error = %err, "Error reading multipart text field chunk");
+                    if err.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE
+                        || err.to_string().to_lowercase().contains("limit")
+                    {
+                        UploadError::FileTooLarge
+                    } else {
+                        UploadError::StreamError
                     }
+                })? {
+                    if text_bytes.len() + chunk.len() > MAX_TEXT_FIELD_SIZE {
+                        return Err(UploadError::FieldTooLarge);
+                    }
+                    text_bytes.extend_from_slice(&chunk);
                 }
                 if let Ok(text) = String::from_utf8(text_bytes) {
                     fields.insert(name, text);
