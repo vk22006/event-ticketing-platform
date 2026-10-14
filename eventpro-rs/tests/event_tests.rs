@@ -15,6 +15,7 @@ use tower_sessions::{Expiry, SessionManagerLayer};
 
 fn create_test_state() -> AppState {
     let public_dir = resolve_public_dir().expect("public directory should resolve");
+    let upload_dir = public_dir.join("uploads");
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
         port: 3001,
@@ -22,6 +23,7 @@ fn create_test_state() -> AppState {
         session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let pool = sqlx::mysql::MySqlPoolOptions::new()
@@ -690,50 +692,14 @@ async fn test_optional_user_db_failure_propagates_500() {
 // 6. Real MySQL Integration Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
+mod common;
+
 #[tokio::test]
 async fn test_real_mysql_catalogue_and_detail_integration() {
-    let _ = dotenvy::dotenv();
-    let _ = dotenvy::from_path("../.env");
-
-    let db_url = match std::env::var("DATABASE_URL") {
-        Ok(url) if !url.trim().is_empty() => url,
-        _ => match (
-            std::env::var("DB_USER"),
-            std::env::var("DB_PASSWORD"),
-            std::env::var("DB_HOST"),
-            std::env::var("DB_PORT"),
-            std::env::var("DB_NAME"),
-        ) {
-            (Ok(u), Ok(p), Ok(h), Ok(port), Ok(d)) => {
-                eventpro::config::build_database_url(&u, &p, &h, &port, &d)
-            }
-            _ => {
-                println!(
-                    "SKIPPED: Real MySQL integration tests skipped because DATABASE_URL / DB_* environment variables are not set."
-                );
-                return;
-            }
-        },
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
     };
-
-    let pool = match sqlx::mysql::MySqlPoolOptions::new()
-        .acquire_timeout(Duration::from_secs(2))
-        .connect(&db_url)
-        .await
-    {
-        Ok(p) => p,
-        Err(err) => {
-            println!(
-                "SKIPPED: Real MySQL integration tests skipped because database is unreachable: {}",
-                err
-            );
-            return;
-        }
-    };
-
-    println!(
-        "REAL MYSQL DETECTED: Running live database catalogue and detail tests against MySQL."
-    );
 
     // 1. Verify Event::find_all with default published filter
     let default_filters = EventFilterParams::default();
@@ -786,13 +752,15 @@ async fn test_real_mysql_catalogue_and_detail_integration() {
 
     // 5. Live Axum Application integration with real DB pool
     let public_dir = resolve_public_dir().expect("public dir");
+    let upload_dir = public_dir.join("uploads");
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
         port: 3001,
-        database_url: db_url.clone(),
+        database_url: "mysql://[REDACTED]".to_string(),
         session_secret: "integration_test_secret_key_12345678".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
     let app_state = AppState::new(pool.clone(), config);
     let app = create_test_app(app_state);
