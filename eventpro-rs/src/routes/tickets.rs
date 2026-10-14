@@ -1,4 +1,5 @@
 use crate::{
+    csrf::get_or_create_csrf_token,
     middleware::{forbidden_response, AuthenticatedUser},
     models::ticket::Ticket,
     routes::events::{render_404, render_500, render_html},
@@ -9,10 +10,17 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
+use tower_sessions::Session;
 
 /// GET /tickets/my - Display all tickets belonging to the authenticated attendee
-pub async fn my_tickets(user: AuthenticatedUser, State(state): State<AppState>) -> Response {
+pub async fn my_tickets(
+    user: AuthenticatedUser,
+    session: Session,
+    State(state): State<AppState>,
+) -> Response {
     let current_user = user.0;
+
+    let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
 
     match Ticket::find_by_user(&state.db, current_user.id).await {
         Ok(tickets) => {
@@ -20,6 +28,7 @@ pub async fn my_tickets(user: AuthenticatedUser, State(state): State<AppState>) 
                 title => "My Tickets",
                 tickets => tickets,
                 user => current_user,
+                csrf_token => csrf_token,
             };
 
             render_html(&state, "dashboard/my-tickets.html", context, StatusCode::OK)
@@ -34,6 +43,7 @@ pub async fn my_tickets(user: AuthenticatedUser, State(state): State<AppState>) 
 /// GET /tickets/:id - View single ticket details
 pub async fn view_ticket(
     user: AuthenticatedUser,
+    session: Session,
     State(state): State<AppState>,
     Path(id_str): Path<String>,
 ) -> Response {
@@ -43,6 +53,8 @@ pub async fn view_ticket(
         Ok(id) if id > 0 => id,
         _ => return render_404(&state, Some(current_user)),
     };
+
+    let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
 
     match Ticket::find_by_id(&state.db, ticket_id).await {
         Ok(Some(ticket)) => {
@@ -57,6 +69,7 @@ pub async fn view_ticket(
                 title => format!("Ticket – {}", ticket.ticket_code),
                 ticket => ticket,
                 user => current_user,
+                csrf_token => csrf_token,
             };
 
             render_html(&state, "ticket/view.html", context, StatusCode::OK)
