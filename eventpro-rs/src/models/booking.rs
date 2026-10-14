@@ -73,14 +73,30 @@ pub enum BookingError {
     RegistrationClosed,
     #[error("Invalid quantity. Must be between 1 and 10")]
     InvalidQuantity,
+    #[error("Seat tier selection is required for this event")]
+    SeatTypeRequired,
     #[error("Invalid seat type selected")]
     InvalidSeatType,
     #[error("Not enough seats available for this event")]
     InsufficientEventCapacity,
     #[error("Not enough seats available in selected tier")]
     InsufficientSeatTypeCapacity,
+    #[error("Failed to generate a unique ticket code after maximum retries")]
+    TicketGenerationFailed,
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
+}
+
+pub const MAX_TICKET_CODE_RETRIES: usize = 3;
+
+fn is_ticket_code_collision(err: &sqlx::Error) -> bool {
+    if let sqlx::Error::Database(db_err) = err {
+        let is_1062 = db_err.code().as_deref() == Some("1062");
+        let msg = db_err.message();
+        (is_1062 || msg.contains("Duplicate entry")) && !msg.contains("PRIMARY")
+    } else {
+        false
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -218,8 +234,8 @@ impl Booking {
     /// 1. Lock `events` record (`FOR UPDATE`).
     /// 2. Lock `seat_types` record (`FOR UPDATE`, if seat_type_id is provided).
     ///
-    /// Validates publication status, timing, deadline, and capacity invariants.
-    /// Inserts booking, generates tickets, and updates remaining seat counters.
+    /// Validates publication status, timing, deadline, seat tier consistency, and capacity invariants.
+    /// Inserts booking, generates tickets with collision retry, and updates remaining seat counters.
     pub async fn create_transactional(
         pool: &MySqlPool,
         user_id: i32,
@@ -227,6 +243,51 @@ impl Booking {
         seat_type_id: Option<i32>,
         quantity: i32,
     ) -> Result<CreateBookingResult, BookingError> {
+        Self::create_transactional_internal(
+            pool,
+            user_id,
+            event_id,
+            seat_type_id,
+            quantity,
+            Ticket::generate_code,
+        )
+        .await
+    }
+
+    /// Transactional booking with custom code generator for deterministic collision testing.
+    pub async fn create_transactional_with_generator<F>(
+        pool: &MySqlPool,
+        user_id: i32,
+        event_id: i32,
+        seat_type_id: Option<i32>,
+        quantity: i32,
+        code_generator: F,
+    ) -> Result<CreateBookingResult, BookingError>
+    where
+        F: FnMut(i32, i32) -> String,
+    {
+        Self::create_transactional_internal(
+            pool,
+            user_id,
+            event_id,
+            seat_type_id,
+            quantity,
+            code_generator,
+        )
+        .await
+    }
+
+    async fn create_transactional_internal<F>(
+        pool: &MySqlPool,
+        user_id: i32,
+        event_id: i32,
+        seat_type_id: Option<i32>,
+        quantity: i32,
+        mut code_generator: F,
+    ) -> Result<CreateBookingResult, BookingError>
+    where
+        F: FnMut(i32, i32) -> String,
+    {
         if !(1..=10).contains(&quantity) {
             return Err(BookingError::InvalidQuantity);
         }
@@ -265,8 +326,21 @@ impl Booking {
             return Err(BookingError::InsufficientEventCapacity);
         }
 
-        // 2. Lock seat_type row if seat_type_id is provided
-        let unit_price = if let Some(st_id) = seat_type_id {
+        // 2. Validate seat-type consistency & lock tier row if applicable
+        let tier_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM seat_types WHERE event_id = ?")
+                .bind(ev.id)
+                .fetch_one(&mut *tx)
+                .await?;
+
+        let has_tiers = tier_count.0 > 0;
+
+        let unit_price = if has_tiers {
+            let st_id = match seat_type_id {
+                Some(id) => id,
+                None => return Err(BookingError::SeatTypeRequired),
+            };
+
             let seat_row: Option<LockedSeatType> = sqlx::query_as(
                 "SELECT event_id, price, total_seats, booked_seats FROM seat_types WHERE id = ? FOR UPDATE",
             )
@@ -289,6 +363,10 @@ impl Booking {
 
             s.price
         } else {
+            // General admission: event has no defined seat tiers
+            if seat_type_id.is_some() {
+                return Err(BookingError::InvalidSeatType);
+            }
             ev.ticket_price
         };
 
@@ -309,32 +387,62 @@ impl Booking {
 
         let booking_id = res.last_insert_id() as i32;
 
-        // 4. Generate and insert ticket records
+        // 4. Generate and insert ticket records with bounded collision retry
         let mut tickets = Vec::with_capacity(quantity as usize);
         for _ in 0..quantity {
-            let ticket_code = Ticket::generate_code(ev.id, booking_id);
-            let t_res = sqlx::query(
-                "INSERT INTO tickets (booking_id, user_id, event_id, ticket_code, status, issued_at) \
-                 VALUES (?, ?, ?, ?, 'active', NOW())",
-            )
-            .bind(booking_id)
-            .bind(user_id)
-            .bind(ev.id)
-            .bind(&ticket_code)
-            .execute(&mut *tx)
-            .await?;
+            let mut inserted = false;
+            for attempt in 1..=MAX_TICKET_CODE_RETRIES {
+                let ticket_code = code_generator(ev.id, booking_id);
+                let t_res = sqlx::query(
+                    "INSERT INTO tickets (booking_id, user_id, event_id, ticket_code, status, issued_at) \
+                     VALUES (?, ?, ?, ?, 'active', NOW())",
+                )
+                .bind(booking_id)
+                .bind(user_id)
+                .bind(ev.id)
+                .bind(&ticket_code)
+                .execute(&mut *tx)
+                .await;
 
-            let ticket_id = t_res.last_insert_id() as i32;
-            tickets.push(Ticket {
-                id: ticket_id,
-                booking_id,
-                user_id,
-                event_id: ev.id,
-                ticket_code,
-                seat_number: None,
-                status: "active".to_string(),
-                issued_at: Some(chrono::Utc::now().naive_utc()),
-            });
+                match t_res {
+                    Ok(res) => {
+                        let ticket_id = res.last_insert_id() as i32;
+                        tickets.push(Ticket {
+                            id: ticket_id,
+                            booking_id,
+                            user_id,
+                            event_id: ev.id,
+                            ticket_code,
+                            seat_number: None,
+                            status: "active".to_string(),
+                            issued_at: Some(chrono::Utc::now().naive_utc()),
+                        });
+                        inserted = true;
+                        break;
+                    }
+                    Err(err) if is_ticket_code_collision(&err) => {
+                        tracing::warn!(
+                            attempt,
+                            max_retries = MAX_TICKET_CODE_RETRIES,
+                            "Ticket code collision detected; generating new code and retrying"
+                        );
+                        if attempt == MAX_TICKET_CODE_RETRIES {
+                            tracing::error!(
+                                "Exhausted all {} ticket code collision retries",
+                                MAX_TICKET_CODE_RETRIES
+                            );
+                            return Err(BookingError::TicketGenerationFailed);
+                        }
+                    }
+                    Err(err) => {
+                        return Err(BookingError::Database(err));
+                    }
+                }
+            }
+
+            if !inserted {
+                return Err(BookingError::TicketGenerationFailed);
+            }
         }
 
         // 5. Update remaining capacity counters
