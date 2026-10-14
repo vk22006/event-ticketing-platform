@@ -5,6 +5,7 @@ pub mod middleware;
 pub mod models;
 pub mod routes;
 pub mod state;
+pub mod upload;
 
 pub use config::AppConfig;
 pub use error::AppError;
