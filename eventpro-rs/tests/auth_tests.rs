@@ -342,23 +342,59 @@ async fn test_register_post_missing_csrf_rejected_403() {
 }
 
 #[tokio::test]
-async fn test_logout_redirects_to_root() {
+async fn test_logout_post_with_valid_csrf_invalidates_session_and_redirects() {
     let state = create_test_state();
     let app = create_test_app(state);
 
-    let response = app
+    // 1. GET /auth/login to establish session and get CSRF token
+    let login_page_res = app
+        .clone()
         .oneshot(
             Request::builder()
-                .uri("/auth/logout")
+                .uri("/auth/login")
                 .body(axum::body::Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let cookie = login_page_res
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let body = to_bytes(login_page_res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+    let csrf_token = html
+        .split("name=\"csrf_token\" value=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .expect("CSRF token present on login page");
+
+    // 2. POST /auth/logout with valid CSRF token
+    let form_body = format!("csrf_token={}", csrf_token);
+    let logout_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/logout")
+                .header(header::COOKIE, &cookie)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::from(form_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(logout_res.status(), StatusCode::SEE_OTHER);
     assert_eq!(
-        response
+        logout_res
             .headers()
             .get(header::LOCATION)
             .unwrap()
@@ -366,6 +402,88 @@ async fn test_logout_redirects_to_root() {
             .unwrap(),
         "/"
     );
+}
+
+#[tokio::test]
+async fn test_logout_post_missing_or_invalid_csrf_retains_session() {
+    let state = create_test_state();
+    let app = create_test_app(state);
+
+    // GET /auth/login to establish session
+    let login_page_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/auth/login")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let cookie = login_page_res
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // 1. Missing CSRF token
+    let res_missing = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/logout")
+                .header(header::COOKIE, &cookie)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res_missing.status(), StatusCode::FORBIDDEN);
+    let body = to_bytes(res_missing.into_body(), usize::MAX).await.unwrap();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+    assert!(html.contains("CSRF validation failed"));
+
+    // 2. Invalid CSRF token
+    let res_invalid = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/logout")
+                .header(header::COOKIE, &cookie)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::from("csrf_token=forged_bad_token"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res_invalid.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_logout_get_returns_405_method_not_allowed() {
+    let state = create_test_state();
+    let app = create_test_app(state);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/auth/logout")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::METHOD_NOT_ALLOWED);
 }
 
 #[tokio::test]
