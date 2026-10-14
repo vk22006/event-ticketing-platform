@@ -1,4 +1,5 @@
 use crate::{
+    csrf::get_or_create_csrf_token,
     middleware::{forbidden_response, AuthenticatedUser},
     models::{Booking, Event, User},
     routes::events::render_500,
@@ -9,9 +10,14 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
+use tower_sessions::Session;
 
 /// GET /admin/dashboard - Platform overview for administrator accounts
-pub async fn admin_dashboard(user: AuthenticatedUser, State(state): State<AppState>) -> Response {
+pub async fn admin_dashboard(
+    user: AuthenticatedUser,
+    session: Session,
+    State(state): State<AppState>,
+) -> Response {
     let current_user = user.0;
     if current_user.role != "admin" {
         return forbidden_response(&state.jinja, Some("Admin access required."));
@@ -60,11 +66,13 @@ pub async fn admin_dashboard(user: AuthenticatedUser, State(state): State<AppSta
                 revenue => revenue,
             };
 
+            let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
             let context = minijinja::context! {
                 title => "Admin Dashboard",
                 user => current_user,
                 stats => stats,
                 recent_bookings => recent_bookings,
+                csrf_token => csrf_token,
             };
 
             match state.jinja.get_template("dashboard/admin.html") {
