@@ -18,6 +18,7 @@ use tower_sessions::{Expiry, SessionManagerLayer};
 
 fn create_test_state() -> AppState {
     let public_dir = resolve_public_dir().expect("public directory should resolve");
+    let upload_dir = public_dir.join("uploads");
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
         port: 3001,
@@ -25,6 +26,7 @@ fn create_test_state() -> AppState {
         session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let pool = sqlx::mysql::MySqlPoolOptions::new()
@@ -405,31 +407,13 @@ async fn test_unauthenticated_access_rejection() {
     );
 }
 
+mod common;
+
 #[tokio::test]
 async fn test_real_mysql_integration() {
-    let db_url = match std::env::var("DATABASE_URL") {
-        Ok(url) if !url.trim().is_empty() => url,
-        _ => {
-            println!(
-                "SKIPPED: Real MySQL integration tests skipped because DATABASE_URL is not set."
-            );
-            return;
-        }
-    };
-
-    let pool = match sqlx::mysql::MySqlPoolOptions::new()
-        .acquire_timeout(Duration::from_secs(2))
-        .connect(&db_url)
-        .await
-    {
-        Ok(p) => p,
-        Err(err) => {
-            println!(
-                "SKIPPED: Real MySQL integration tests skipped because database at DATABASE_URL is unreachable: {}",
-                err
-            );
-            return;
-        }
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
     };
 
     // If connected, test user retrieval
