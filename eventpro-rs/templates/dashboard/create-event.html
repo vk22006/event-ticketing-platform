@@ -27,7 +27,7 @@
                     <div class="alert alert-error">⚠️ {{ error }}</div>
                 {% endif %}
 
-                <form action="/events/create" method="POST" class="card" style="padding:2rem;">
+                <form action="/events/create" method="POST" enctype="multipart/form-data" class="card" style="padding:2rem;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
                     <div class="form-group">
@@ -95,8 +95,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Event Banner Image</label>
-                        <p class="text-sm text-muted">File uploads are deferred to the uploads phase. Default category icon will be used.</p>
+                        <label class="form-label" for="banner_image">Event Banner Image</label>
+                        <input type="file" id="banner_image" name="banner_image" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif" />
+                        <small class="text-muted" style="display:block;margin-top:0.35rem;">Optional. Permitted formats: JPEG, PNG, WebP, GIF. Maximum size: 5 MB.</small>
                     </div>
 
                     <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:0.5rem;">
