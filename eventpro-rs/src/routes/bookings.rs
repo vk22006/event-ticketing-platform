@@ -135,7 +135,34 @@ pub async fn show_payment(
             }
 
             let selected_seat =
-                seat_type_id.and_then(|st_id| seat_types.into_iter().find(|s| s.id == st_id));
+                seat_type_id.and_then(|st_id| seat_types.iter().find(|s| s.id == st_id).cloned());
+
+            if !seat_types.is_empty() && seat_type_id.is_none() {
+                let context = minijinja::context! {
+                    title => "Book Tickets",
+                    event => event,
+                    seatTypes => seat_types,
+                    error => "Please select a seat tier.",
+                    user => current_user,
+                };
+                return render_html(
+                    &state,
+                    "booking/select.html",
+                    context,
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+
+            if seat_types.is_empty() && seat_type_id.is_some() {
+                return (StatusCode::BAD_REQUEST, Html("Invalid seat type selected"))
+                    .into_response();
+            }
+
+            if !seat_types.is_empty() && seat_type_id.is_some() && selected_seat.is_none() {
+                return (StatusCode::BAD_REQUEST, Html("Invalid seat type selected"))
+                    .into_response();
+            }
+
             let price = selected_seat
                 .as_ref()
                 .map(|s| s.price)
@@ -279,8 +306,26 @@ pub async fn confirm_booking(
             Html("Registration deadline has passed"),
         )
             .into_response(),
+        Err(BookingError::SeatTypeRequired) => (
+            StatusCode::BAD_REQUEST,
+            Html("Seat tier selection is required for this event"),
+        )
+            .into_response(),
         Err(BookingError::InvalidSeatType) => {
             (StatusCode::BAD_REQUEST, Html("Invalid seat type selected")).into_response()
+        }
+        Err(BookingError::TicketGenerationFailed) => {
+            let context = minijinja::context! {
+                title => "Booking Error",
+                message => "Unable to complete booking due to a ticket code conflict. Please try again.",
+                user => current_user,
+            };
+            render_html(
+                &state,
+                "error/500.html",
+                context,
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
         }
         Err(BookingError::Database(err)) => {
             tracing::error!(error = %err, "Database error during booking transaction");
