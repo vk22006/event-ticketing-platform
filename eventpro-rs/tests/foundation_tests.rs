@@ -17,13 +17,16 @@ fn test_config_validation_success() {
     let public_dir = eventpro::config::resolve_public_dir()
         .expect("resolve_public_dir should succeed in repository environment");
 
+    let upload_dir = public_dir.join("uploads");
+
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
         port: 3001,
         database_url: "mysql://user:pass@localhost:3306/testdb".to_string(),
         session_secret: "super_secret_session_key_12345".to_string(),
         app_env: "development".to_string(),
-        public_dir,
+        public_dir: public_dir.clone(),
+        upload_dir: upload_dir.clone(),
     };
 
     assert!(config.validate().is_ok());
@@ -34,6 +37,7 @@ fn test_config_validation_success() {
 fn test_config_validation_invalid_db_url() {
     let public_dir = eventpro::config::resolve_public_dir()
         .expect("resolve_public_dir should succeed in repository environment");
+    let upload_dir = public_dir.join("uploads");
 
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
@@ -42,6 +46,7 @@ fn test_config_validation_invalid_db_url() {
         session_secret: "super_secret_session_key_12345".to_string(),
         app_env: "development".to_string(),
         public_dir,
+        upload_dir,
     };
 
     assert_eq!(
@@ -54,6 +59,7 @@ fn test_config_validation_invalid_db_url() {
 fn test_config_validation_short_secret() {
     let public_dir = eventpro::config::resolve_public_dir()
         .expect("resolve_public_dir should succeed in repository environment");
+    let upload_dir = public_dir.join("uploads");
 
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
@@ -62,6 +68,7 @@ fn test_config_validation_short_secret() {
         session_secret: "short".to_string(),
         app_env: "development".to_string(),
         public_dir,
+        upload_dir,
     };
 
     assert_eq!(
@@ -79,6 +86,7 @@ fn test_config_validation_invalid_public_dir() {
         session_secret: "super_secret_session_key_12345".to_string(),
         app_env: "development".to_string(),
         public_dir: PathBuf::from("nonexistent_directory_for_test_12345"),
+        upload_dir: PathBuf::from("nonexistent_directory_for_test_12345"),
     };
 
     match config.validate() {
@@ -91,6 +99,7 @@ fn test_config_validation_invalid_public_dir() {
 fn test_config_debug_redaction() {
     let public_dir = eventpro::config::resolve_public_dir()
         .expect("resolve_public_dir should succeed in repository environment");
+    let upload_dir = public_dir.join("uploads");
 
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
@@ -99,6 +108,7 @@ fn test_config_debug_redaction() {
         session_secret: "confidential_session_key_12345678".to_string(),
         app_env: "production".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let debug_str = format!("{:?}", config);
@@ -195,6 +205,8 @@ async fn test_liveness_endpoint() {
     let public_dir = eventpro::config::resolve_public_dir()
         .expect("resolve_public_dir should succeed in repository environment");
 
+    let upload_dir = public_dir.join("uploads");
+
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
         port: 3001,
@@ -202,6 +214,7 @@ async fn test_liveness_endpoint() {
         session_secret: "test_secret_must_be_long_enough".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let pool = sqlx::mysql::MySqlPoolOptions::new()
@@ -235,6 +248,7 @@ async fn test_liveness_endpoint() {
 async fn test_readiness_endpoint_failure_sanitization() {
     let public_dir = eventpro::config::resolve_public_dir()
         .expect("resolve_public_dir should succeed in repository environment");
+    let upload_dir = public_dir.join("uploads");
 
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
@@ -243,6 +257,7 @@ async fn test_readiness_endpoint_failure_sanitization() {
         session_secret: "test_secret_must_be_long_enough".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let pool = sqlx::mysql::MySqlPoolOptions::new()
@@ -279,6 +294,7 @@ async fn test_readiness_endpoint_failure_sanitization() {
 async fn test_static_asset_serving() {
     let public_dir = eventpro::config::resolve_public_dir()
         .expect("resolve_public_dir should succeed in repository environment");
+    let upload_dir = public_dir.join("uploads");
 
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
@@ -287,6 +303,7 @@ async fn test_static_asset_serving() {
         session_secret: "test_secret_must_be_long_enough".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let pool = sqlx::mysql::MySqlPoolOptions::new()
