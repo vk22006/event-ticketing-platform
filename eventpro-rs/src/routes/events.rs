@@ -80,10 +80,13 @@ async fn parse_event_request(
             Ok(m) => m,
             Err(err) => {
                 tracing::warn!(error = %err, "Failed to parse multipart request");
-                return Err((
-                    EventFormData::default(),
-                    "Failed to process form submission. Please check your inputs.".to_string(),
-                ));
+                let is_oversized = err.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE;
+                let msg = if is_oversized {
+                    "Uploaded file exceeds the maximum allowed size of 5 MB.".to_string()
+                } else {
+                    "Failed to process form submission. Please check your inputs.".to_string()
+                };
+                return Err((EventFormData::default(), msg));
             }
         };
 
@@ -96,10 +99,13 @@ async fn parse_event_request(
             Ok(Form(f)) => Ok((f, None)),
             Err(err) => {
                 tracing::warn!(error = %err, "Failed to deserialize URL-encoded form");
-                Err((
-                    EventFormData::default(),
-                    "Invalid form data received.".to_string(),
-                ))
+                let is_oversized = err.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE;
+                let msg = if is_oversized {
+                    "Form submission exceeds the maximum allowed size.".to_string()
+                } else {
+                    "Invalid form data received.".to_string()
+                };
+                Err((EventFormData::default(), msg))
             }
         }
     }
@@ -137,6 +143,7 @@ pub async fn root_redirect() -> Response {
 /// GET /events - Public event catalogue with filters and search
 pub async fn list_events(
     user: OptionalUser,
+    session: Session,
     State(state): State<AppState>,
     Query(query): Query<EventListQuery>,
 ) -> Response {
@@ -185,6 +192,7 @@ pub async fn list_events(
 
     match tokio::try_join!(events_future, categories_future) {
         Ok((events, categories)) => {
+            let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
             let query_context = minijinja::context! {
                 category_id => category_id,
                 city => city.unwrap_or_default(),
@@ -198,6 +206,7 @@ pub async fn list_events(
                 categories => categories,
                 query => query_context,
                 user => user.0,
+                csrf_token => csrf_token,
             };
 
             render_html(&state, "index.html", context, StatusCode::OK)
@@ -212,6 +221,7 @@ pub async fn list_events(
 /// GET /events/:id - Public event details with seat tier availability
 pub async fn show_event(
     user: OptionalUser,
+    session: Session,
     State(state): State<AppState>,
     Path(id_str): Path<String>,
 ) -> Response {
@@ -240,12 +250,14 @@ pub async fn show_event(
                 return render_404(&state, user.0);
             }
 
+            let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
             let context = minijinja::context! {
                 title => event.title,
                 event => event,
                 seatTypes => &seat_types,
                 seat_types => &seat_types,
                 user => user.0,
+                csrf_token => csrf_token,
             };
 
             render_html(&state, "event-detail.html", context, StatusCode::OK)
@@ -936,8 +948,15 @@ pub async fn delete_event(
         );
     }
 
+    let banner_to_delete = event.banner_image.clone();
+
     match Event::delete(&state.db, event_id).await {
-        Ok(_) => Redirect::to("/dashboard").into_response(),
+        Ok(_) => {
+            if let Some(ref banner_url) = banner_to_delete {
+                upload::remove_banner_file(&state.config.upload_dir, banner_url).await;
+            }
+            Redirect::to("/dashboard").into_response()
+        }
         Err(err) => {
             tracing::error!(error = %err, event_id = event_id, "Failed to delete event from database");
             render_500(&state, Some(current_user))
