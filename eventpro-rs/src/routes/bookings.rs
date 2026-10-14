@@ -43,6 +43,7 @@ pub struct CancelBookingForm {
 /// GET /bookings/book/:id - Display seat and ticket selection form
 pub async fn show_booking_form(
     user: AuthenticatedUser,
+    session: Session,
     State(state): State<AppState>,
     Path(id_str): Path<String>,
 ) -> Response {
@@ -74,12 +75,14 @@ pub async fn show_booking_form(
                 None
             };
 
+            let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
             let context = minijinja::context! {
                 title => "Book Tickets",
                 event => event,
                 seatTypes => seat_types,
                 error => error,
                 user => current_user,
+                csrf_token => csrf_token,
             };
 
             render_html(&state, "booking/select.html", context, StatusCode::OK)
@@ -268,12 +271,14 @@ pub async fn confirm_booking(
                 .ok()
                 .flatten();
 
+            let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
             let context = minijinja::context! {
                 title => "Booking Confirmed!",
                 booking => booking,
                 tickets => result.tickets,
                 event => event,
                 user => current_user,
+                csrf_token => csrf_token,
             };
 
             render_html(&state, "booking/confirmation.html", context, StatusCode::OK)
