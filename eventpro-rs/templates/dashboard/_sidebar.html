@@ -34,6 +34,11 @@
         {% endif %}
 
         <li><a href="/events">🌍 Browse Events</a></li>
-        <li><a href="/auth/logout" style="color:var(--rose);">🚪 Logout</a></li>
+        <li>
+            <form action="/auth/logout" method="POST" style="margin:0;padding:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="submit" style="display:flex;align-items:center;gap:0.6rem;padding:0.625rem 1.25rem;color:var(--rose);font-size:0.875rem;font-weight:500;background:none;border:none;border-left:3px solid transparent;cursor:pointer;width:100%;text-align:left;font-family:inherit;">🚪 Logout</button>
+            </form>
+        </li>
     </ul>
 </aside>
