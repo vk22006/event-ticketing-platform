@@ -70,7 +70,7 @@ where
         .nest("/auth", auth_routes)
         .nest_service("/css", ServeDir::new(public_dir.join("css")))
         .nest_service("/js", ServeDir::new(public_dir.join("js")))
-        .nest_service("/uploads", ServeDir::new(public_dir.join("uploads")))
+        .nest_service("/uploads", ServeDir::new(&state.config.upload_dir))
         .with_state(state);
 
     if let Some(layer) = session_layer {
