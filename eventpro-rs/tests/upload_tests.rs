@@ -894,3 +894,485 @@ async fn test_existing_urlencoded_creation_backward_compatibility() {
         .execute(&pool)
         .await;
 }
+
+// ─── Phase 6.2.1 Hardening Tests ──────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_real_mysql_upload_between_2mb_and_5mb_succeeds() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    println!("REAL MYSQL DETECTED: Running 3 MB upload integration test.");
+
+    let public_dir = resolve_public_dir().expect("public dir");
+    let test_upload_dir = TestUploadDir::new();
+
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "upload_integration_test_secret_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir: public_dir.clone(),
+        upload_dir: test_upload_dir.path().clone(),
+    };
+
+    let state = AppState::new(pool.clone(), config);
+    let app = create_test_app(state);
+
+    let (auth_cookie, create_token) = http_login(&app, "alice@events.com", "Organizer@1").await;
+
+    // Create 3 MB valid JPEG image (> 2 MB default limit, <= 5 MB banner limit)
+    let mut large_jpeg = vec![0u8; 3 * 1024 * 1024];
+    large_jpeg[0..10]
+        .copy_from_slice(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+
+    let unique_title = format!("Large 3MB Banner Event {}", rand::random::<u32>());
+    let (content_type, payload) = MultipartBuilder::new()
+        .text("csrf_token", &create_token)
+        .text("title", &unique_title)
+        .text("description", "Testing 3MB banner upload")
+        .text("event_date", "2028-12-01T10:00")
+        .text("total_seats", "100")
+        .text("ticket_price", "25.00")
+        .file("banner_image", "large.jpg", "image/jpeg", &large_jpeg)
+        .build();
+
+    let post_create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/events/create")
+                .header(header::COOKIE, &auth_cookie)
+                .header(header::CONTENT_TYPE, content_type)
+                .body(axum::body::Body::from(payload))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(post_create.status(), StatusCode::SEE_OTHER);
+
+    // Verify in DB
+    let row: (i32, Option<String>) =
+        sqlx::query_as("SELECT id, banner_image FROM events WHERE title = ?")
+            .bind(&unique_title)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    let banner_url = row.1.expect("banner_image must be persisted");
+    let filename = banner_url.strip_prefix("/uploads/").unwrap();
+    let saved_path = test_upload_dir.path().join(filename);
+    assert!(saved_path.exists());
+    let metadata = std::fs::metadata(&saved_path).unwrap();
+    assert_eq!(metadata.len(), 3 * 1024 * 1024);
+
+    // Cleanup
+    let _ = sqlx::query("DELETE FROM events WHERE id = ?")
+        .bind(row.0)
+        .execute(&pool)
+        .await;
+}
+
+#[tokio::test]
+async fn test_real_mysql_request_exceeding_total_body_limit_rejected() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public dir");
+    let test_upload_dir = TestUploadDir::new();
+
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "upload_integration_test_secret_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir: public_dir.clone(),
+        upload_dir: test_upload_dir.path().clone(),
+    };
+
+    let state = AppState::new(pool.clone(), config);
+    let app = create_test_app(state);
+
+    let (auth_cookie, create_token) = http_login(&app, "alice@events.com", "Organizer@1").await;
+
+    // Create 9 MB payload (exceeding 8 MB MAX_EVENT_FORM_BODY_SIZE)
+    let huge_data = vec![0u8; 9 * 1024 * 1024];
+    let (content_type, payload) = MultipartBuilder::new()
+        .text("csrf_token", &create_token)
+        .text("title", "Oversized Body Event")
+        .file("banner_image", "huge.jpg", "image/jpeg", &huge_data)
+        .build();
+
+    let post_create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/events/create")
+                .header(header::COOKIE, &auth_cookie)
+                .header(header::CONTENT_TYPE, content_type)
+                .body(axum::body::Body::from(payload))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(post_create.status(), StatusCode::BAD_REQUEST);
+    let body_bytes = to_bytes(post_create.into_body(), usize::MAX).await.unwrap();
+    let resp_html = String::from_utf8_lossy(&body_bytes);
+    assert!(
+        resp_html.contains("Uploaded file exceeds the maximum allowed size of 5 MB."),
+        "Must display safe size limit message when total body limit exceeded"
+    );
+
+    // Verify no files written to disk
+    assert_eq!(
+        std::fs::read_dir(test_upload_dir.path()).unwrap().count(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn test_other_routes_do_not_inherit_large_body_limit() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public dir");
+    let test_upload_dir = TestUploadDir::new();
+
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "upload_integration_test_secret_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir: public_dir.clone(),
+        upload_dir: test_upload_dir.path().clone(),
+    };
+
+    let state = AppState::new(pool.clone(), config);
+    let app = create_test_app(state);
+
+    // POST 2.5 MB payload to /auth/login (which has default 2 MB limit)
+    let large_body = vec![b'a'; 2500 * 1024];
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/login")
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::from(large_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Default body limit produces 413 Payload Too Large on unconfigured routes
+    assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn test_real_mysql_oversized_text_field_aborts_and_cleans_up() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public dir");
+    let test_upload_dir = TestUploadDir::new();
+
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "upload_integration_test_secret_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir: public_dir.clone(),
+        upload_dir: test_upload_dir.path().clone(),
+    };
+
+    let state = AppState::new(pool.clone(), config);
+    let app = create_test_app(state);
+
+    let (auth_cookie, create_token) = http_login(&app, "alice@events.com", "Organizer@1").await;
+
+    let valid_png = [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52,
+    ];
+    // 70 KB string (> 64 KB MAX_TEXT_FIELD_SIZE)
+    let huge_desc = "x".repeat(70 * 1024);
+
+    let (ctype, payload) = MultipartBuilder::new()
+        .text("csrf_token", &create_token)
+        .file("banner_image", "test.png", "image/png", &valid_png)
+        .text("description", &huge_desc)
+        .text("title", "Oversized Description Event")
+        .text("event_date", "2028-12-01T10:00")
+        .text("total_seats", "100")
+        .build();
+
+    let post_create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/events/create")
+                .header(header::COOKIE, &auth_cookie)
+                .header(header::CONTENT_TYPE, ctype)
+                .body(axum::body::Body::from(payload))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(post_create.status(), StatusCode::BAD_REQUEST);
+    let body_bytes = to_bytes(post_create.into_body(), usize::MAX).await.unwrap();
+    let resp_html = String::from_utf8_lossy(&body_bytes);
+    assert!(
+        resp_html.contains("Form field exceeds the maximum allowed size of 64 KB."),
+        "Must display safe size limit message for oversized text fields"
+    );
+
+    // Verify temporary banner was cleaned up
+    assert_eq!(
+        std::fs::read_dir(test_upload_dir.path()).unwrap().count(),
+        0,
+        "Temporary banner file must be cleaned up when text field limit exceeded"
+    );
+}
+
+#[tokio::test]
+async fn test_real_mysql_event_deletion_cleans_up_dynamic_banner() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public dir");
+    let test_upload_dir = TestUploadDir::new();
+
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "upload_integration_test_secret_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir: public_dir.clone(),
+        upload_dir: test_upload_dir.path().clone(),
+    };
+
+    let state = AppState::new(pool.clone(), config);
+    let app = create_test_app(state);
+
+    let (auth_cookie, create_token) = http_login(&app, "alice@events.com", "Organizer@1").await;
+
+    // 1. Create event with dynamic banner
+    let valid_png = [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52,
+    ];
+    let unique_title = format!("Delete Banner Event {}", rand::random::<u32>());
+    let (ctype, payload) = MultipartBuilder::new()
+        .text("csrf_token", &create_token)
+        .text("title", &unique_title)
+        .text("event_date", "2028-12-01T10:00")
+        .text("total_seats", "100")
+        .file("banner_image", "del.png", "image/png", &valid_png)
+        .build();
+
+    let post_create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/events/create")
+                .header(header::COOKIE, &auth_cookie)
+                .header(header::CONTENT_TYPE, ctype)
+                .body(axum::body::Body::from(payload))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(post_create.status(), StatusCode::SEE_OTHER);
+
+    let row: (i32, Option<String>) =
+        sqlx::query_as("SELECT id, banner_image FROM events WHERE title = ?")
+            .bind(&unique_title)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let event_id = row.0;
+    let banner_url = row.1.unwrap();
+    let filename = banner_url.strip_prefix("/uploads/").unwrap();
+    let file_path = test_upload_dir.path().join(filename);
+    assert!(file_path.exists(), "Banner file must exist before deletion");
+
+    // 2. Delete event
+    let del_body = format!(
+        "csrf_token={}",
+        percent_encoding::utf8_percent_encode(&create_token, percent_encoding::NON_ALPHANUMERIC)
+    );
+    let post_del = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/events/{}/delete", event_id))
+                .header(header::COOKIE, &auth_cookie)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::from(del_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(post_del.status(), StatusCode::SEE_OTHER);
+
+    // Verify deleted in DB
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE id = ?")
+        .bind(event_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "Event must be deleted from DB");
+
+    // Verify banner file on disk was removed
+    assert!(
+        !file_path.exists(),
+        "Dynamic banner file must be removed on event deletion"
+    );
+}
+
+#[tokio::test]
+async fn test_real_mysql_event_deletion_preserves_seed_banner() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public dir");
+    let test_upload_dir = TestUploadDir::new();
+
+    // Create a dummy seed banner file in upload directory: 1 hyphen pattern
+    let seed_filename = "event-1772530115548.jpg";
+    let seed_path = test_upload_dir.path().join(seed_filename);
+    std::fs::write(&seed_path, b"dummy seed image content").unwrap();
+
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "upload_integration_test_secret_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir: public_dir.clone(),
+        upload_dir: test_upload_dir.path().clone(),
+    };
+
+    let state = AppState::new(pool.clone(), config);
+    let app = create_test_app(state);
+
+    let (auth_cookie, create_token) = http_login(&app, "alice@events.com", "Organizer@1").await;
+
+    // Create event directly in DB referencing seed banner
+    let res = sqlx::query(
+        "INSERT INTO events (organizer_id, title, event_date, total_seats, available_seats, ticket_price, status, banner_image) \
+         VALUES (2, 'Seed Banner Deletion Test', '2028-12-01 10:00:00', 100, 100, 0.00, 'draft', ?)",
+    )
+    .bind(format!("/uploads/{}", seed_filename))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let event_id = res.last_insert_id() as i32;
+
+    // Delete event
+    let del_body = format!(
+        "csrf_token={}",
+        percent_encoding::utf8_percent_encode(&create_token, percent_encoding::NON_ALPHANUMERIC)
+    );
+    let post_del = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/events/{}/delete", event_id))
+                .header(header::COOKIE, &auth_cookie)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::from(del_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(post_del.status(), StatusCode::SEE_OTHER);
+
+    // Verify seed banner on disk STILL EXISTS!
+    assert!(
+        seed_path.exists(),
+        "Seed banner file must NOT be deleted upon event deletion"
+    );
+}
+
+#[tokio::test]
+async fn test_uploads_serves_nosniff_header_on_success_and_error() {
+    let public_dir = resolve_public_dir().expect("public dir");
+    let test_upload_dir = TestUploadDir::new();
+
+    // 1. Write sample file
+    let test_file = test_upload_dir.path().join("event-test-sample.jpg");
+    std::fs::write(&test_file, b"test content").unwrap();
+
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "upload_integration_test_secret_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir: public_dir.clone(),
+        upload_dir: test_upload_dir.path().clone(),
+    };
+
+    let pool = common::get_test_pool().await.unwrap();
+    let state = AppState::new(pool, config);
+    let app = create_test_app(state);
+
+    // GET existing file -> 200 OK + nosniff
+    let req_ok = Request::builder()
+        .uri("/uploads/event-test-sample.jpg")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp_ok = app.clone().oneshot(req_ok).await.unwrap();
+    assert_eq!(resp_ok.status(), StatusCode::OK);
+    assert_eq!(
+        resp_ok
+            .headers()
+            .get("x-content-type-options")
+            .map(|v| v.to_str().unwrap()),
+        Some("nosniff"),
+        "Successful static file response must include X-Content-Type-Options: nosniff"
+    );
+
+    // GET non-existent file -> 404 NOT_FOUND + nosniff
+    let req_err = Request::builder()
+        .uri("/uploads/nonexistent-missing-file.jpg")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp_err = app.oneshot(req_err).await.unwrap();
+    assert_eq!(resp_err.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        resp_err
+            .headers()
+            .get("x-content-type-options")
+            .map(|v| v.to_str().unwrap()),
+        Some("nosniff"),
+        "Error static file response must include X-Content-Type-Options: nosniff"
+    );
+}
