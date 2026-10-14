@@ -7,7 +7,7 @@ edition = "2021"
 axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors", "set-header"] }
 tower-sessions = "0.13"
 tower-sessions-sqlx-store = { version = "0.14", features = ["mysql"] }
 time = "0.3"
