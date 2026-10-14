@@ -311,7 +311,7 @@ async fn test_navbar_rendering_anonymous_user() {
 
     assert!(rendered.contains("href=\"/auth/login\""));
     assert!(rendered.contains("href=\"/auth/register\""));
-    assert!(!rendered.contains("href=\"/auth/logout\""));
+    assert!(!rendered.contains("action=\"/auth/logout\""));
     assert!(!rendered.contains("role-badge"));
     assert!(!rendered.contains("Create Event"));
 }
@@ -334,12 +334,13 @@ async fn test_navbar_rendering_attendee_user() {
     };
 
     let rendered = template
-        .render(minijinja::context! { user => user })
+        .render(minijinja::context! { user => user, csrf_token => "token_abc123" })
         .unwrap();
 
     assert!(rendered.contains("role-badge--attendee"));
     assert!(rendered.contains("Dashboard"));
-    assert!(rendered.contains("href=\"/auth/logout\""));
+    assert!(rendered.contains("action=\"/auth/logout\""));
+    assert!(rendered.contains("name=\"csrf_token\" value=\"token_abc123\""));
     assert!(!rendered.contains("Create Event"));
     assert!(!rendered.contains("href=\"/admin/dashboard\""));
 }
