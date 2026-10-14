@@ -27,7 +27,7 @@
                     <div class="alert alert-error">⚠️ {{ error }}</div>
                 {% endif %}
 
-                <form action="/events/{{ event.id }}/edit" method="POST" class="card" style="padding:2rem;">
+                <form action="/events/{{ event.id }}/edit" method="POST" enctype="multipart/form-data" class="card" style="padding:2rem;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
                     <div class="form-group">
@@ -96,14 +96,19 @@
                         </div>
                     </div>
 
-                    {% if event.banner_image %}
-                        <div class="form-group">
-                            <label class="form-label">Current Banner</label>
-                            <p class="text-sm text-muted mb-1">
-                                <img src="{{ event.banner_image }}" style="height:60px;border-radius:6px;display:inline-block;vertical-align:middle;" alt="{{ event.title }}" />
-                            </p>
-                        </div>
-                    {% endif %}
+                    <div class="form-group">
+                        <label class="form-label" for="banner_image">Event Banner Image</label>
+                        {% if event.banner_image %}
+                            <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:1rem;">
+                                <img src="{{ event.banner_image }}" style="height:70px;border-radius:6px;object-fit:cover;border:1px solid var(--border);" alt="Current banner for {{ event.title }}" />
+                                <span class="text-sm text-muted">Current banner. Choose a new file below to replace it.</span>
+                            </div>
+                        {% else %}
+                            <p class="text-sm text-muted mb-2">No banner currently uploaded. A default category icon is displayed.</p>
+                        {% endif %}
+                        <input type="file" id="banner_image" name="banner_image" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif" />
+                        <small class="text-muted" style="display:block;margin-top:0.35rem;">Optional replacement. Permitted formats: JPEG, PNG, WebP, GIF. Maximum size: 5 MB.</small>
+                    </div>
 
                     <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:0.5rem;">
                         <a href="/dashboard" class="btn btn-ghost">Cancel</a>
