@@ -1,0 +1,103 @@
+{
+  "target": "express",
+  "baseUrl": "http://127.0.0.1:3000",
+  "concurrencyList": [
+    1
+  ],
+  "duration": 2,
+  "warmupDuration": 1,
+  "runsCount": 1,
+  "numLogicalCores": 8,
+  "system": {
+    "platform": "win32",
+    "arch": "arm64",
+    "release": "10.0.26200",
+    "totalMemoryMb": 15983
+  },
+  "results": [
+    {
+      "target": "express",
+      "route": "catalogue",
+      "path": "/events",
+      "concurrency": 1,
+      "run": 1,
+      "rps": 181,
+      "latency": {
+        "p50": 5,
+        "p99": 9,
+        "mean": 5,
+        "stddev": 1.05
+      },
+      "requestsTotal": 362,
+      "status2xx": 362,
+      "errors": 0,
+      "timeouts": 0,
+      "cpuPercent": 8.76,
+      "memoryRssMb": 125.79,
+      "avgBytes": 25481
+    },
+    {
+      "target": "express",
+      "route": "event_detail",
+      "path": "/events/1",
+      "concurrency": 1,
+      "run": 1,
+      "rps": 249,
+      "latency": {
+        "p50": 3,
+        "p99": 6,
+        "mean": 3.53,
+        "stddev": 0.83
+      },
+      "requestsTotal": 498,
+      "status2xx": 498,
+      "errors": 0,
+      "timeouts": 0,
+      "cpuPercent": 10.8,
+      "memoryRssMb": 182.09,
+      "avgBytes": 10302
+    },
+    {
+      "target": "express",
+      "route": "dashboard",
+      "path": "/dashboard",
+      "concurrency": 1,
+      "run": 1,
+      "rps": 167,
+      "latency": {
+        "p50": 5,
+        "p99": 14,
+        "mean": 5.52,
+        "stddev": 1.48
+      },
+      "requestsTotal": 334,
+      "status2xx": 334,
+      "errors": 0,
+      "timeouts": 0,
+      "cpuPercent": 9.42,
+      "memoryRssMb": 180.66,
+      "avgBytes": 11581
+    },
+    {
+      "target": "express",
+      "route": "bookings_history",
+      "path": "/bookings/my",
+      "concurrency": 1,
+      "run": 1,
+      "rps": 216.5,
+      "latency": {
+        "p50": 4,
+        "p99": 7,
+        "mean": 4.16,
+        "stddev": 1.05
+      },
+      "requestsTotal": 433,
+      "status2xx": 433,
+      "errors": 0,
+      "timeouts": 0,
+      "cpuPercent": 7.01,
+      "memoryRssMb": 188.92,
+      "avgBytes": 9842
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "express": {
+    "mean": 358.72,
+    "stddev": 16.54,
+    "min": 332.13,
+    "max": 379.82,
+    "trials": [
+      358.72,
+      379.82,
+      371.46,
+      332.13,
+      351.45
+    ]
+  },
+  "axum": {
+    "mean": 121.54,
+    "stddev": 39.08,
+    "min": 89.38,
+    "max": 196.89,
+    "trials": [
+      196.89,
+      89.38,
+      105.78,
+      95.57,
+      120.09
+    ]
+  },
+  "comparison": {
+    "startupReductionPercent": 66.12,
+    "startupSpeedupFactor": 3
+  }
+}
