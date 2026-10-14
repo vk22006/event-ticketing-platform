@@ -97,6 +97,50 @@ pub fn resolve_public_dir() -> Result<PathBuf, ConfigError> {
     )))
 }
 
+/// Resolve the upload directory, defaulting to public_dir/uploads if not explicitly configured.
+pub fn resolve_upload_dir(public_dir: &Path) -> Result<PathBuf, ConfigError> {
+    if let Ok(dir_str) = std::env::var("UPLOAD_DIR") {
+        let candidate = PathBuf::from(dir_str);
+        if candidate.is_dir() {
+            return std::fs::canonicalize(&candidate).map_err(|e| {
+                ConfigError::InvalidUploadDir(format!(
+                    "Failed to canonicalize UPLOAD_DIR {:?}: {}",
+                    candidate, e
+                ))
+            });
+        }
+        if std::fs::create_dir_all(&candidate).is_ok() {
+            if let Ok(canonical) = std::fs::canonicalize(&candidate) {
+                return Ok(canonical);
+            }
+        }
+        return Err(ConfigError::InvalidUploadDir(format!(
+            "Specified UPLOAD_DIR {:?} does not exist and could not be created",
+            candidate
+        )));
+    }
+
+    let default_uploads = public_dir.join("uploads");
+    if default_uploads.is_dir() {
+        if let Ok(canonical) = std::fs::canonicalize(&default_uploads) {
+            return Ok(canonical);
+        }
+        return Ok(default_uploads);
+    }
+
+    if std::fs::create_dir_all(&default_uploads).is_ok() {
+        if let Ok(canonical) = std::fs::canonicalize(&default_uploads) {
+            return Ok(canonical);
+        }
+        return Ok(default_uploads);
+    }
+
+    Err(ConfigError::InvalidUploadDir(format!(
+        "Upload directory could not be resolved or created at {:?}",
+        default_uploads
+    )))
+}
+
 #[derive(Clone)]
 pub struct AppConfig {
     pub host: String,
@@ -105,6 +149,7 @@ pub struct AppConfig {
     pub session_secret: String,
     pub app_env: String,
     pub public_dir: PathBuf,
+    pub upload_dir: PathBuf,
 }
 
 impl fmt::Debug for AppConfig {
@@ -116,6 +161,7 @@ impl fmt::Debug for AppConfig {
             .field("session_secret", &"[REDACTED]")
             .field("app_env", &self.app_env)
             .field("public_dir", &self.public_dir)
+            .field("upload_dir", &self.upload_dir)
             .finish()
     }
 }
@@ -134,6 +180,8 @@ pub enum ConfigError {
         "Public asset directory not found or missing required structure (css, js, uploads): {0}"
     )]
     InvalidPublicDir(String),
+    #[error("Upload directory not found or cannot be created: {0}")]
+    InvalidUploadDir(String),
 }
 
 impl AppConfig {
@@ -156,6 +204,7 @@ impl AppConfig {
             .unwrap_or_else(|_| "ev3nt_l1fecycle_s3cret_k3y_2024".to_string());
 
         let public_dir = resolve_public_dir()?;
+        let upload_dir = resolve_upload_dir(&public_dir)?;
 
         let config = Self {
             host,
@@ -164,6 +213,7 @@ impl AppConfig {
             session_secret,
             app_env,
             public_dir,
+            upload_dir,
         };
 
         config.validate()?;
@@ -183,6 +233,13 @@ impl AppConfig {
             return Err(ConfigError::InvalidPublicDir(format!(
                 "Public directory {:?} is invalid or missing required structure (css, js, uploads)",
                 self.public_dir
+            )));
+        }
+
+        if !self.upload_dir.is_dir() {
+            return Err(ConfigError::InvalidUploadDir(format!(
+                "Upload directory {:?} is not a valid directory",
+                self.upload_dir
             )));
         }
 
