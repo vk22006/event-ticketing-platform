@@ -3,6 +3,7 @@ use axum::{
     http::{header, Request, StatusCode},
     Router,
 };
+mod common;
 use eventpro::{
     config::{resolve_public_dir, AppConfig},
     models::{
@@ -26,6 +27,7 @@ fn urlencode(s: &str) -> String {
 
 fn create_test_state() -> AppState {
     let public_dir = resolve_public_dir().expect("public directory should resolve");
+    let upload_dir = public_dir.join("uploads");
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
         port: 3001,
@@ -33,6 +35,7 @@ fn create_test_state() -> AppState {
         session_secret: "phase5_test_session_secret_123456789".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let pool = sqlx::mysql::MySqlPoolOptions::new()
@@ -512,39 +515,21 @@ async fn test_unauthenticated_booking_access_rejected() {
 
 #[tokio::test]
 async fn test_real_mysql_booking_workflow_lifecycle() {
-    let _ = dotenvy::dotenv();
-    let db_url = match std::env::var("DATABASE_URL") {
-        Ok(url) if !url.is_empty() => url,
-        _ => {
-            eprintln!("Skipping real MySQL booking tests: DATABASE_URL not configured");
-            return;
-        }
-    };
-
-    let pool = match sqlx::mysql::MySqlPoolOptions::new()
-        .max_connections(10)
-        .acquire_timeout(Duration::from_secs(5))
-        .connect(&db_url)
-        .await
-    {
-        Ok(p) => p,
-        Err(err) => {
-            eprintln!(
-                "Skipping real MySQL tests: cannot connect to database: {}",
-                err
-            );
-            return;
-        }
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
     };
 
     let public_dir = resolve_public_dir().expect("public directory should resolve");
+    let upload_dir = public_dir.join("uploads");
     let config = AppConfig {
         host: "127.0.0.1".to_string(),
         port: 3001,
-        database_url: db_url.clone(),
+        database_url: "mysql://[REDACTED]".to_string(),
         session_secret: "phase5_integration_session_secret_123456".to_string(),
         app_env: "test".to_string(),
         public_dir,
+        upload_dir,
     };
 
     let app_state = AppState::new(pool.clone(), config);
@@ -615,10 +600,17 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
 
     // Authenticate users
     // Charlie is attendee ("user"), Alice is "organizer", Admin is "admin"
-    let (attendee_cookie, attendee_csrf) = http_login(&app, "charlie@mail.com", "User@1234").await;
+    let (attendee_cookie, _initial_attendee_csrf) =
+        http_login(&app, "charlie@mail.com", "User@1234").await;
     let (organizer_cookie, organizer_csrf) =
         http_login(&app, "alice@events.com", "Organizer@1").await;
     let (admin_cookie, _admin_csrf) = http_login(&app, "admin@eventpro.com", "Admin@1234").await;
+
+    let charlie = User::find_by_email(&pool, "charlie@mail.com")
+        .await
+        .unwrap()
+        .expect("Charlie must exist in seed data");
+    let charlie_id = charlie.id;
 
     // --- Dynamic Fixture Setup ---
     let event_title = format!("Phase5 Test Event {}", rand::random::<u32>());
@@ -648,6 +640,21 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
     .expect("Creating test seat type must succeed");
 
     let seat_type_id = insert_seat_res.last_insert_id() as i32;
+
+    // Obtain fresh CSRF token for the attendee session from the payment review page
+    let pay_get_req = Request::builder()
+        .uri(format!(
+            "/bookings/payment?eventId={}&seat_type_id={}&quantity=1",
+            event_id, seat_type_id
+        ))
+        .header(header::COOKIE, &attendee_cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let pay_get_resp = app.clone().oneshot(pay_get_req).await.unwrap();
+    assert_eq!(pay_get_resp.status(), StatusCode::OK);
+    let pay_get_body = to_bytes(pay_get_resp.into_body(), 64 * 1024).await.unwrap();
+    let attendee_csrf = extract_csrf_token(&String::from_utf8_lossy(&pay_get_body))
+        .expect("CSRF token must be present in payment review page");
 
     // A. Role check: Organizers and Admins are FORBIDDEN from booking
     let org_book_req = Request::builder()
@@ -794,9 +801,10 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
 
     // Verify Database Invariants
     let booking_row: (i32, Decimal, String, i32) = sqlx::query_as(
-        "SELECT id, total_amount, status, quantity FROM bookings WHERE event_id = ? AND user_id = 3 ORDER BY id DESC LIMIT 1"
+        "SELECT id, total_amount, status, quantity FROM bookings WHERE event_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1"
     )
     .bind(event_id)
+    .bind(charlie_id)
     .fetch_one(&pool)
     .await
     .expect("Booking must exist in DB");
@@ -1019,29 +1027,9 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
 
 #[tokio::test]
 async fn test_real_mysql_concurrent_booking_prevents_overselling() {
-    let _ = dotenvy::dotenv();
-    let db_url = match std::env::var("DATABASE_URL") {
-        Ok(url) if !url.is_empty() => url,
-        _ => {
-            eprintln!("Skipping real MySQL concurrency test: DATABASE_URL not configured");
-            return;
-        }
-    };
-
-    let pool = match sqlx::mysql::MySqlPoolOptions::new()
-        .max_connections(15)
-        .acquire_timeout(Duration::from_secs(5))
-        .connect(&db_url)
-        .await
-    {
-        Ok(p) => p,
-        Err(err) => {
-            eprintln!(
-                "Skipping real MySQL concurrency test: cannot connect: {}",
-                err
-            );
-            return;
-        }
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
     };
 
     // Create an event with exactly 5 available seats
@@ -1122,6 +1110,426 @@ async fn test_real_mysql_concurrent_booking_prevents_overselling() {
         .await;
     let _ = sqlx::query("DELETE FROM events WHERE id = ?")
         .bind(event_id)
+        .execute(&pool)
+        .await;
+}
+
+#[tokio::test]
+async fn test_real_mysql_seat_type_consistency() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let future_date = chrono::Utc::now().naive_utc() + chrono::Duration::days(15);
+
+    // 1. Create Event A (Tiered event)
+    let title_a = format!("Tiered Event {}", rand::random::<u32>());
+    let res_a = sqlx::query(
+        "INSERT INTO events (organizer_id, title, venue, city, event_date, total_seats, available_seats, ticket_price, status) \
+         VALUES (2, ?, 'Auditorium A', 'Bengaluru', ?, 100, 100, 500.00, 'published')"
+    )
+    .bind(&title_a)
+    .bind(future_date)
+    .execute(&pool)
+    .await
+    .expect("Creating Event A must succeed");
+    let evt_a_id = res_a.last_insert_id() as i32;
+
+    // Create seat tier for Event A
+    let res_st_a = sqlx::query(
+        "INSERT INTO seat_types (event_id, type_name, price, total_seats, booked_seats) \
+         VALUES (?, 'VIP Tier', 1000.00, 20, 0)",
+    )
+    .bind(evt_a_id)
+    .execute(&pool)
+    .await
+    .expect("Creating Seat Type A must succeed");
+    let st_a_id = res_st_a.last_insert_id() as i32;
+
+    // 2. Create Event B (Foreign event with its own tier)
+    let title_b = format!("Foreign Tiered Event {}", rand::random::<u32>());
+    let res_b = sqlx::query(
+        "INSERT INTO events (organizer_id, title, venue, city, event_date, total_seats, available_seats, ticket_price, status) \
+         VALUES (2, ?, 'Auditorium B', 'Delhi', ?, 50, 50, 300.00, 'published')"
+    )
+    .bind(&title_b)
+    .bind(future_date)
+    .execute(&pool)
+    .await
+    .expect("Creating Event B must succeed");
+    let evt_b_id = res_b.last_insert_id() as i32;
+
+    let res_st_b = sqlx::query(
+        "INSERT INTO seat_types (event_id, type_name, price, total_seats, booked_seats) \
+         VALUES (?, 'Balcony Tier', 400.00, 10, 0)",
+    )
+    .bind(evt_b_id)
+    .execute(&pool)
+    .await
+    .expect("Creating Seat Type B must succeed");
+    let st_b_id = res_st_b.last_insert_id() as i32;
+
+    // 3. Create Event C (General Admission - NO seat tiers defined)
+    let title_c = format!("General Admission Event {}", rand::random::<u32>());
+    let res_c = sqlx::query(
+        "INSERT INTO events (organizer_id, title, venue, city, event_date, total_seats, available_seats, ticket_price, status) \
+         VALUES (2, ?, 'Open Ground', 'Mumbai', ?, 200, 200, 250.00, 'published')"
+    )
+    .bind(&title_c)
+    .bind(future_date)
+    .execute(&pool)
+    .await
+    .expect("Creating Event C must succeed");
+    let evt_c_id = res_c.last_insert_id() as i32;
+
+    // --- Subtest 1: Missing seat type on a tiered event MUST be rejected with SeatTypeRequired ---
+    let missing_st_res = Booking::create_transactional(&pool, 1, evt_a_id, None, 2).await;
+    match missing_st_res {
+        Err(BookingError::SeatTypeRequired) => {}
+        other => panic!(
+            "Expected BookingError::SeatTypeRequired on tiered event with missing seat_type_id, got {:?}",
+            other
+        ),
+    }
+
+    // Invariants: No booking record, no tickets, no seat count changes
+    let bkg_count_a: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM bookings WHERE event_id = ?")
+        .bind(evt_a_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        bkg_count_a.0, 0,
+        "No bookings should be created on failed tier validation"
+    );
+
+    let tkt_count_a: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tickets WHERE event_id = ?")
+        .bind(evt_a_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        tkt_count_a.0, 0,
+        "No tickets should be created on failed tier validation"
+    );
+
+    let ev_a_seats: (i32,) = sqlx::query_as("SELECT available_seats FROM events WHERE id = ?")
+        .bind(evt_a_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        ev_a_seats.0, 100,
+        "Event available_seats must remain unchanged"
+    );
+
+    let st_a_booked: (i32,) = sqlx::query_as("SELECT booked_seats FROM seat_types WHERE id = ?")
+        .bind(st_a_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        st_a_booked.0, 0,
+        "SeatType booked_seats must remain unchanged"
+    );
+
+    // --- Subtest 2: Valid tier selection on a tiered event MUST succeed ---
+    let valid_tier_res = Booking::create_transactional(&pool, 1, evt_a_id, Some(st_a_id), 2)
+        .await
+        .expect("Valid tier booking should succeed");
+    assert_eq!(valid_tier_res.tickets.len(), 2);
+    assert_eq!(valid_tier_res.total_amount, Decimal::new(200000, 2)); // 1000.00 * 2
+
+    let ev_a_seats_after: (i32,) =
+        sqlx::query_as("SELECT available_seats FROM events WHERE id = ?")
+            .bind(evt_a_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        ev_a_seats_after.0, 98,
+        "Event available_seats must be decremented by 2"
+    );
+
+    let st_a_booked_after: (i32,) =
+        sqlx::query_as("SELECT booked_seats FROM seat_types WHERE id = ?")
+            .bind(st_a_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        st_a_booked_after.0, 2,
+        "SeatType booked_seats must be incremented by 2"
+    );
+
+    // --- Subtest 3: Foreign event's seat type MUST be rejected with InvalidSeatType ---
+    let foreign_st_res = Booking::create_transactional(&pool, 1, evt_a_id, Some(st_b_id), 1).await;
+    match foreign_st_res {
+        Err(BookingError::InvalidSeatType) => {}
+        other => panic!(
+            "Expected BookingError::InvalidSeatType on foreign seat type, got {:?}",
+            other
+        ),
+    }
+
+    let ev_a_seats_after_foreign: (i32,) =
+        sqlx::query_as("SELECT available_seats FROM events WHERE id = ?")
+            .bind(evt_a_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        ev_a_seats_after_foreign.0, 98,
+        "Event available_seats must not change on rejected foreign seat type"
+    );
+
+    let st_b_booked: (i32,) = sqlx::query_as("SELECT booked_seats FROM seat_types WHERE id = ?")
+        .bind(st_b_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        st_b_booked.0, 0,
+        "Foreign seat tier booked_seats must remain 0"
+    );
+
+    // --- Subtest 4: General admission event (no tiers) without seat_type_id MUST succeed ---
+    let ga_res = Booking::create_transactional(&pool, 1, evt_c_id, None, 3)
+        .await
+        .expect("General admission booking should succeed without seat_type_id");
+    assert_eq!(ga_res.tickets.len(), 3);
+    assert_eq!(ga_res.total_amount, Decimal::new(75000, 2)); // 250.00 * 3
+
+    let ev_c_seats: (i32,) = sqlx::query_as("SELECT available_seats FROM events WHERE id = ?")
+        .bind(evt_c_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        ev_c_seats.0, 197,
+        "GA event available_seats must be decremented by 3"
+    );
+
+    // --- Subtest 5: General admission event WITH seat_type_id MUST be rejected ---
+    let ga_with_st_res = Booking::create_transactional(&pool, 1, evt_c_id, Some(st_a_id), 1).await;
+    match ga_with_st_res {
+        Err(BookingError::InvalidSeatType) => {}
+        other => panic!(
+            "Expected BookingError::InvalidSeatType on GA event with seat_type_id, got {:?}",
+            other
+        ),
+    }
+
+    // Clean up all dynamically created records
+    let _ = sqlx::query("DELETE FROM tickets WHERE event_id IN (?, ?, ?)")
+        .bind(evt_a_id)
+        .bind(evt_b_id)
+        .bind(evt_c_id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM bookings WHERE event_id IN (?, ?, ?)")
+        .bind(evt_a_id)
+        .bind(evt_b_id)
+        .bind(evt_c_id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM seat_types WHERE event_id IN (?, ?)")
+        .bind(evt_a_id)
+        .bind(evt_b_id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM events WHERE id IN (?, ?, ?)")
+        .bind(evt_a_id)
+        .bind(evt_b_id)
+        .bind(evt_c_id)
+        .execute(&pool)
+        .await;
+}
+
+#[tokio::test]
+async fn test_real_mysql_ticket_code_collision_retry_and_exhaustion() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let future_date = chrono::Utc::now().naive_utc() + chrono::Duration::days(20);
+
+    // Create an event for deterministic collision tests
+    let event_title = format!("Collision Retry Event {}", rand::random::<u32>());
+    let res = sqlx::query(
+        "INSERT INTO events (organizer_id, title, venue, city, event_date, total_seats, available_seats, ticket_price, status) \
+         VALUES (2, ?, 'Coliseum', 'Hyderabad', ?, 50, 50, 150.00, 'published')"
+    )
+    .bind(&event_title)
+    .bind(future_date)
+    .execute(&pool)
+    .await
+    .expect("Creating collision test event must succeed");
+    let evt_id = res.last_insert_id() as i32;
+
+    // Create a base booking to hold a colliding ticket
+    let bkg_res = sqlx::query(
+        "INSERT INTO bookings (user_id, event_id, quantity, total_amount, status, payment_method, booked_at) \
+         VALUES (1, ?, 1, 150.00, 'confirmed', 'mock_payment', NOW())"
+    )
+    .bind(evt_id)
+    .execute(&pool)
+    .await
+    .expect("Creating baseline booking must succeed");
+    let baseline_bkg_id = bkg_res.last_insert_id() as i32;
+
+    // Pre-insert an existing ticket code that will trigger unique constraint error 1062
+    let colliding_code = format!("COLLISION-TEST-CODE-{}", rand::random::<u32>());
+    sqlx::query(
+        "INSERT INTO tickets (booking_id, user_id, event_id, ticket_code, status, issued_at) \
+         VALUES (?, 1, ?, ?, 'active', NOW())",
+    )
+    .bind(baseline_bkg_id)
+    .bind(evt_id)
+    .bind(&colliding_code)
+    .execute(&pool)
+    .await
+    .expect("Pre-inserting colliding ticket code must succeed");
+
+    // --- Subtest 1: Deterministic Collision Retry with Successful Recovery ---
+    let attempt_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter_clone = attempt_counter.clone();
+    let collision_target = colliding_code.clone();
+
+    let recovering_generator = move |ev_id: i32, bkg_id: i32| {
+        let count = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if count == 0 {
+            // First attempt: deliberately collide with pre-inserted code
+            collision_target.clone()
+        } else {
+            // Second attempt: generate unique code
+            format!(
+                "RECOVERED-TICKET-EVT-{}-BKG-{}-{}",
+                ev_id,
+                bkg_id,
+                rand::random::<u32>()
+            )
+        }
+    };
+
+    let booking_res = Booking::create_transactional_with_generator(
+        &pool,
+        1,
+        evt_id,
+        None,
+        1,
+        recovering_generator,
+    )
+    .await
+    .expect("Booking should succeed after colliding code is regenerated");
+
+    assert_eq!(
+        attempt_counter.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "Generator should have been invoked exactly twice (1 collision + 1 retry success)"
+    );
+    assert_eq!(booking_res.tickets.len(), 1);
+    assert!(
+        booking_res.tickets[0]
+            .ticket_code
+            .starts_with("RECOVERED-TICKET-"),
+        "Recovered ticket must have the regenerated code"
+    );
+
+    // --- Subtest 2: Deterministic Collision Retry Exhaustion & Complete Rollback ---
+    let seats_before: (i32,) = sqlx::query_as("SELECT available_seats FROM events WHERE id = ?")
+        .bind(evt_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let bkgs_before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM bookings WHERE event_id = ?")
+        .bind(evt_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let tkts_before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tickets WHERE event_id = ?")
+        .bind(evt_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let exhaust_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let exhaust_clone = exhaust_counter.clone();
+    let collision_exhaust_target = colliding_code.clone();
+
+    let always_colliding_generator = move |_ev_id: i32, _bkg_id: i32| {
+        exhaust_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        collision_exhaust_target.clone()
+    };
+
+    let exhaust_res = Booking::create_transactional_with_generator(
+        &pool,
+        1,
+        evt_id,
+        None,
+        1,
+        always_colliding_generator,
+    )
+    .await;
+
+    match exhaust_res {
+        Err(BookingError::TicketGenerationFailed) => {}
+        other => panic!(
+            "Expected BookingError::TicketGenerationFailed when collisions exhaust retries, got {:?}",
+            other
+        ),
+    }
+
+    assert_eq!(
+        exhaust_counter.load(std::sync::atomic::Ordering::SeqCst),
+        eventpro::models::booking::MAX_TICKET_CODE_RETRIES,
+        "Generator must be called exactly MAX_TICKET_CODE_RETRIES times before aborting"
+    );
+
+    // Verify atomicity and total rollback
+    let seats_after: (i32,) = sqlx::query_as("SELECT available_seats FROM events WHERE id = ?")
+        .bind(evt_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        seats_after.0, seats_before.0,
+        "Available seats must not be decremented when ticket retry fails"
+    );
+
+    let bkgs_after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM bookings WHERE event_id = ?")
+        .bind(evt_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        bkgs_after.0, bkgs_before.0,
+        "Booking record must be rolled back on retry exhaustion"
+    );
+
+    let tkts_after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tickets WHERE event_id = ?")
+        .bind(evt_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        tkts_after.0, tkts_before.0,
+        "No tickets should remain after transaction rollback"
+    );
+
+    // Cleanup
+    let _ = sqlx::query("DELETE FROM tickets WHERE event_id = ?")
+        .bind(evt_id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM bookings WHERE event_id = ?")
+        .bind(evt_id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM events WHERE id = ?")
+        .bind(evt_id)
         .execute(&pool)
         .await;
 }
