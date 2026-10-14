@@ -52,6 +52,7 @@ cp .env.example .env
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Express values | Discrete connection variables (fallback if `DATABASE_URL` not set) |
 | `SESSION_SECRET` | None | Encryption key for sessions (minimum 16 characters) |
 | `PUBLIC_DIR` | `../public` | Directory containing CSS, JS, and uploads |
+| `UPLOAD_DIR` | `PUBLIC_DIR/uploads` | Dedicated storage directory for event banner uploads |
 
 > **Security Note**: `AppConfig` implements a custom `Debug` formatter that redacts `DATABASE_URL` and `SESSION_SECRET` as `[REDACTED]`. Credentials are never exposed in logs.
 
@@ -117,3 +118,52 @@ CREATE TABLE IF NOT EXISTS tower_sessions (
 ```
 
 Existing tables (`users`, `events`, `categories`, `seat_types`, `bookings`, `tickets`) remain untouched.
+
+---
+
+## 7. Strict MySQL Integration-Test Mode
+
+The integration test suite supports two operational modes:
+
+### Local Development Mode (Default)
+When running `cargo test`, MySQL integration tests inspect `DATABASE_URL` (or discrete `DB_*` environment variables). If database configuration is absent or the MySQL server is unreachable:
+- Tests output an informative notice: `SKIPPED: Real MySQL integration tests skipped because...`
+- The test exits cleanly with a passing status, ensuring offline developers can run unit and template tests without a running database daemon.
+
+### Strict Verification Mode (`STRICT_DB_TESTS=1`)
+For CI pipelines, quality gates, and verification runs:
+```bash
+# Linux / macOS / Bash
+STRICT_DB_TESTS=1 cargo test
+
+# Windows PowerShell
+$env:STRICT_DB_TESTS="1"; cargo test
+```
+*(Supported aliases: `STRICT_TEST=1`, `STRICT_MYSQL=1`)*
+
+**Strict Mode Invariants**:
+1. **Fails on Missing or Empty Configuration**: If `DATABASE_URL` is missing, empty, or unconfigured, the test immediately panics with a clear error.
+2. **Fails on Invalid Configuration**: If `DATABASE_URL` does not use the `mysql://` scheme, the test immediately panics.
+3. **Fails on Connection Failure**: If MySQL is unreachable or times out, the test fails immediately. Unreachable databases can never silently pass in strict mode.
+4. **Credential Redaction**: Database connection strings with passwords are never printed to stdout, stderr, or panic backtraces.
+5. **Execution Visibility**: When connected to a live database, tests emit:
+   `REAL MYSQL DETECTED: Connected to MySQL test database successfully.`
+   allowing easy differentiation between tests executed against real MySQL and skipped tests.
+
+---
+
+## 8. Event Banner Uploads & Storage Architecture
+
+### Supported Formats & File Validation
+- **Allowed Formats**: JPEG (`.jpg`), PNG (`.png`), WebP (`.webp`), and GIF (`.gif`).
+- **Validation**: File contents are validated through magic-byte file signature detection (`AllowedImageFormat::detect`). Submitter filenames and Content-Type headers are untrusted.
+- **Maximum File Size**: 5 MB (`5 * 1024 * 1024` bytes). Oversized files are rejected during bounded chunk streaming to prevent unbounded memory consumption.
+- **Filename Generation**: Server-controlled random names generated with cryptographically secure random bytes: `event-{timestamp}-{random_hex}.{ext}`. Path traversal (`..`, `/`, `\`) is structurally impossible.
+
+### Storage & Lifecycle Safety
+- **Storage Root**: Defaults to `PUBLIC_DIR/uploads/`, overrideable via `UPLOAD_DIR`. Directory structure is validated at startup.
+- **Replacement Safety**: When an existing event banner is replaced, the old file is only deleted **after** the database update transaction succeeds. Seed asset banners (`event-{timestamp}.jpg`) are protected from automated deletion.
+- **Cleanup Guarantee**: If an event creation or update fails (due to form validation, CSRF, or database error), any newly uploaded file is immediately removed from disk to prevent orphaned files.
+- **Static Serving**: Uploaded media is served exclusively as static assets via `tower_http::services::ServeDir` mounted at `/uploads`. Files are never executed or interpreted as code.
+- **Deployment & Backups**: In containerized or ephemeral cloud environments, ensure `UPLOAD_DIR` points to a persistent volume (e.g. mounted PVC or volume share) and include the directory in routine snapshot backup policies.
+
