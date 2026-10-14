@@ -28,6 +28,11 @@ pub struct RegisterForm {
     pub csrf_token: Option<String>,
 }
 
+#[derive(serde::Deserialize)]
+pub struct LogoutForm {
+    pub csrf_token: Option<String>,
+}
+
 /// GET /auth/login - Render login form for guests
 pub async fn show_login(
     _guest: RequireGuest,
@@ -283,8 +288,18 @@ pub async fn register(
     Redirect::to("/dashboard").into_response()
 }
 
-/// GET /auth/logout - Invalidate session and redirect to homepage
-pub async fn logout(session: Session) -> Response {
+/// POST /auth/logout - Invalidate session with CSRF protection and redirect to homepage
+pub async fn logout(
+    session: Session,
+    State(state): State<AppState>,
+    Form(payload): Form<LogoutForm>,
+) -> Response {
+    let submitted_csrf = payload.csrf_token.as_deref().unwrap_or_default();
+    if !validate_csrf_token(&session, submitted_csrf).await {
+        tracing::warn!("Logout attempt rejected due to invalid or missing CSRF token");
+        return csrf_error_response(&state.jinja);
+    }
+
     if let Err(err) = session.flush().await {
         tracing::error!(error = %err, "Error flushing session on logout");
     }
