@@ -525,6 +525,163 @@ async fn test_unauthenticated_access_rejection() {
     );
 }
 
+#[tokio::test]
+async fn test_user_password_excluded_from_session_serialization() {
+    let user = User {
+        id: 42,
+        full_name: "Test User".to_string(),
+        email: "test@example.com".to_string(),
+        password: "$2b$10$super_secret_password_hash".to_string(),
+        role: "attendee".to_string(),
+        avatar: None,
+        bio: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    let serialized = serde_json::to_string(&user).expect("serialization should succeed");
+    assert!(!serialized.contains("super_secret_password_hash"));
+    assert!(!serialized.contains("\"password\""));
+
+    let deserialized: User =
+        serde_json::from_str(&serialized).expect("deserialization should succeed");
+    assert_eq!(deserialized.id, 42);
+    assert_eq!(deserialized.email, "test@example.com");
+    assert_eq!(deserialized.role, "attendee");
+    assert_eq!(deserialized.password, ""); // Defaulted to empty
+}
+
+#[tokio::test]
+async fn test_authenticated_user_fast_path_from_session_without_db() {
+    use tower_sessions::Session;
+
+    // Use test state with dummy pool that would fail if connected to
+    let state = create_test_state();
+
+    let app =
+        Router::new()
+            .route(
+                "/seed-session",
+                get(|session: Session| async move {
+                    let user = User {
+                        id: 99,
+                        full_name: "Cached User".to_string(),
+                        email: "cached@example.com".to_string(),
+                        password: String::new(),
+                        role: "organizer".to_string(),
+                        avatar: None,
+                        bio: None,
+                        created_at: None,
+                        updated_at: None,
+                    };
+                    session.insert("user_id", 99).await.unwrap();
+                    session.insert("auth_user", user).await.unwrap();
+                    "session_seeded"
+                }),
+            )
+            .route(
+                "/protected-fast-path",
+                get(|user: AuthenticatedUser| async move {
+                    format!("user:{}:{}", user.0.id, user.0.role)
+                }),
+            )
+            .with_state(state.clone());
+
+    let session_store = tower_sessions::MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store);
+    let app = app.layer(session_layer);
+
+    // 1. Seed the session
+    let seed_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/seed-session")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(seed_res.status(), StatusCode::OK);
+    let cookie = seed_res
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // 2. Call protected route using cookie - should succeed immediately from session without DB query!
+    let prot_res = app
+        .oneshot(
+            Request::builder()
+                .uri("/protected-fast-path")
+                .header(header::COOKIE, cookie)
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(prot_res.status(), StatusCode::OK);
+    let body = to_bytes(prot_res.into_body(), 1024 * 16).await.unwrap();
+    assert_eq!(&body[..], b"user:99:organizer");
+}
+
+#[tokio::test]
+async fn test_rbac_verification_with_cached_user() {
+    let attendee = User {
+        id: 1,
+        full_name: "Attendee".to_string(),
+        email: "att@example.com".to_string(),
+        password: String::new(),
+        role: "attendee".to_string(),
+        avatar: None,
+        bio: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    let organizer = User {
+        id: 2,
+        full_name: "Organizer".to_string(),
+        email: "org@example.com".to_string(),
+        password: String::new(),
+        role: "organizer".to_string(),
+        avatar: None,
+        bio: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    let admin = User {
+        id: 3,
+        full_name: "Admin".to_string(),
+        email: "adm@example.com".to_string(),
+        password: String::new(),
+        role: "admin".to_string(),
+        avatar: None,
+        bio: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    // Attendee should only match attendee
+    assert!(verify_role(&attendee, &["attendee"]).is_ok());
+    assert!(verify_role(&attendee, &["organizer"]).is_err());
+    assert!(verify_role(&attendee, &["admin"]).is_err());
+
+    // Organizer matches organizer or attendee
+    assert!(verify_role(&organizer, &["organizer"]).is_ok());
+    assert!(verify_role(&organizer, &["attendee", "organizer"]).is_ok());
+    assert!(verify_role(&organizer, &["admin"]).is_err());
+
+    // Admin matches admin
+    assert!(verify_role(&admin, &["admin"]).is_ok());
+    assert!(verify_role(&admin, &["organizer", "admin"]).is_ok());
+}
+
 mod common;
 
 #[tokio::test]
@@ -543,4 +700,350 @@ async fn test_real_mysql_integration() {
         assert_eq!(user.role, "admin");
         assert!(User::verify_password("Admin@1234", &user.password));
     }
+}
+
+#[tokio::test]
+async fn test_real_mysql_role_downgrade_revocation_policy() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public directory should resolve");
+    let upload_dir = public_dir.join("uploads");
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://ignored".to_string(),
+        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
+        app_env: "test".to_string(),
+        public_dir,
+        upload_dir,
+    };
+    let state = AppState::new(pool.clone(), config);
+    let app = create_test_app(state);
+
+    let test_email = format!("downgrade_test_{}@eventpro.com", rand::random::<u32>());
+    let hashed_pw = User::hash_password("User@1234").expect("hash");
+
+    // 1. Create temporary organizer user
+    let user_id = User::create(&pool, "Temp Org", &test_email, &hashed_pw, "organizer")
+        .await
+        .expect("create user");
+
+    // Helper: simulate login by getting CSRF and posting credentials
+    let login_page = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/auth/login")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let init_cookie = login_page
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let body_bytes = to_bytes(login_page.into_body(), 64 * 1024).await.unwrap();
+    let html = String::from_utf8_lossy(&body_bytes);
+    let csrf_token = html
+        .split("name=\"csrf_token\" value=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .expect("csrf token");
+
+    let form = format!(
+        "email={}&password=User%401234&csrf_token={}",
+        percent_encoding::utf8_percent_encode(&test_email, percent_encoding::NON_ALPHANUMERIC),
+        csrf_token
+    );
+
+    let login_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/login")
+                .header(header::COOKIE, &init_cookie)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::from(form))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(login_resp.status(), StatusCode::SEE_OTHER);
+    let org_cookie = login_resp
+        .headers()
+        .get(header::SET_COOKIE)
+        .map(|v| v.to_str().unwrap().to_string())
+        .unwrap_or(init_cookie);
+
+    // 2. Verified organizer access: GET /events/create returns 200 OK
+    let create_req = Request::builder()
+        .uri("/events/create")
+        .header(header::COOKIE, &org_cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let create_resp = app.clone().oneshot(create_req).await.unwrap();
+    assert_eq!(create_resp.status(), StatusCode::OK);
+
+    // 3. Admin downgrades user in MySQL to 'user'
+    sqlx::query("UPDATE users SET role = 'user' WHERE id = ?")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("update role");
+
+    // 4. Verification under Session Invalidation Policy:
+    // Once session is re-established (e.g. following session invalidation or logout/login),
+    // the downgraded attendee CANNOT access /events/create or /admin/dashboard
+    let login_page2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/auth/login")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let init_cookie2 = login_page2
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let body_bytes2 = to_bytes(login_page2.into_body(), 64 * 1024).await.unwrap();
+    let csrf_token2 = String::from_utf8_lossy(&body_bytes2)
+        .split("name=\"csrf_token\" value=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .expect("csrf token")
+        .to_string();
+
+    let form2 = format!(
+        "email={}&password=User%401234&csrf_token={}",
+        percent_encoding::utf8_percent_encode(&test_email, percent_encoding::NON_ALPHANUMERIC),
+        csrf_token2
+    );
+    let login_resp2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/login")
+                .header(header::COOKIE, &init_cookie2)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(axum::body::Body::from(form2))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let user_cookie = login_resp2
+        .headers()
+        .get(header::SET_COOKIE)
+        .map(|v| v.to_str().unwrap().to_string())
+        .unwrap_or(init_cookie2);
+
+    // Attempting to access organizer route as downgraded user MUST be rejected with 403 Forbidden
+    let create_req2 = Request::builder()
+        .uri("/events/create")
+        .header(header::COOKIE, &user_cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let create_resp2 = app.clone().oneshot(create_req2).await.unwrap();
+    assert_eq!(
+        create_resp2.status(),
+        StatusCode::FORBIDDEN,
+        "Downgraded user must be denied organizer privileges"
+    );
+
+    // Attempting to access admin route MUST also be rejected with 403 Forbidden
+    let admin_req = Request::builder()
+        .uri("/admin/dashboard")
+        .header(header::COOKIE, &user_cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let admin_resp = app.clone().oneshot(admin_req).await.unwrap();
+    assert_eq!(
+        admin_resp.status(),
+        StatusCode::FORBIDDEN,
+        "Downgraded user must be denied admin privileges"
+    );
+
+    // Cleanup test user
+    let _ = sqlx::query("DELETE FROM users WHERE id = ?")
+        .bind(user_id)
+        .execute(&pool)
+        .await;
+}
+
+#[tokio::test]
+async fn test_fallback_when_auth_user_missing_from_session() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public directory should resolve");
+    let upload_dir = public_dir.join("uploads");
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://ignored".to_string(),
+        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
+        app_env: "test".to_string(),
+        public_dir,
+        upload_dir,
+    };
+    let state = AppState::new(pool.clone(), config);
+
+    use tower_sessions::Session;
+    let app =
+        Router::new()
+            .route(
+                "/seed-legacy-session",
+                get(|session: Session| async move {
+                    // Seed session with user_id ONLY (no auth_user)
+                    session.insert("user_id", 1).await.unwrap();
+                    "legacy_seeded"
+                }),
+            )
+            .route(
+                "/check-user",
+                get(|user: AuthenticatedUser| async move {
+                    format!("id:{}:{}", user.0.id, user.0.email)
+                }),
+            )
+            .with_state(state);
+
+    let session_store = tower_sessions::MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store);
+    let app = app.layer(session_layer);
+
+    // Seed session
+    let seed_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/seed-legacy-session")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let cookie = seed_resp
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // Request protected route: fallback queries DB for id 1 (admin@eventpro.com), caches auth_user, succeeds
+    let check_resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/check-user")
+                .header(header::COOKIE, cookie)
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(check_resp.status(), StatusCode::OK);
+    let body = to_bytes(check_resp.into_body(), 1024).await.unwrap();
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.starts_with("id:1:admin@eventpro.com"));
+}
+
+#[tokio::test]
+async fn test_deleted_user_invalidation_and_redirect() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let public_dir = resolve_public_dir().expect("public directory should resolve");
+    let upload_dir = public_dir.join("uploads");
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://ignored".to_string(),
+        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
+        app_env: "test".to_string(),
+        public_dir,
+        upload_dir,
+    };
+    let state = AppState::new(pool.clone(), config);
+
+    use tower_sessions::Session;
+    let app = Router::new()
+        .route(
+            "/seed-deleted-user-session",
+            get(|session: Session| async move {
+                // Seed session with a nonexistent user ID 999999
+                session.insert("user_id", 999999).await.unwrap();
+                "deleted_seeded"
+            }),
+        )
+        .route(
+            "/protected-route",
+            get(|_user: AuthenticatedUser| async move { "should_never_reach" }),
+        )
+        .with_state(state);
+
+    let session_store = tower_sessions::MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store);
+    let app = app.layer(session_layer);
+
+    let seed_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/seed-deleted-user-session")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let cookie = seed_resp
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    // Access protected route: fallback queries DB for 999999, gets None, flushes session, redirects to /auth/login
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/protected-route")
+                .header(header::COOKIE, cookie)
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        resp.headers()
+            .get(header::LOCATION)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "/auth/login"
+    );
 }
