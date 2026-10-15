@@ -1,0 +1,144 @@
+{
+  "express": {
+    "target": "express",
+    "port": 3000,
+    "routes": {
+      "catalogue": {
+        "path": "/events",
+        "statusCode": 200,
+        "bytes": 25253,
+        "contentType": "text/html; charset=utf-8",
+        "title": "Discover Events – EventPro",
+        "h1": "Discover Amazing Events",
+        "authenticatedDataRendered": null,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title> Discover Events – EventPro </title> <meta name=\"description\" content=\"Discover and book amazing events near you.\" />"
+      },
+      "event_detail": {
+        "path": "/events/1",
+        "statusCode": 200,
+        "bytes": 10069,
+        "contentType": "text/html; charset=utf-8",
+        "title": "SoundWave Music Festival 2025 – EventPro",
+        "h1": "SoundWave Music Festival 2025",
+        "authenticatedDataRendered": null,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title> SoundWave Music Festival 2025 – EventPro </title> <link rel=\"stylesheet\" href=\"/css/main.css\" /> <link rel=\"ico"
+      },
+      "dashboard": {
+        "path": "/dashboard",
+        "statusCode": 200,
+        "bytes": 11346,
+        "contentType": "text/html; charset=utf-8",
+        "title": "Dashboard – EventPro",
+        "h1": "Dashboard",
+        "authenticatedDataRendered": true,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title> Dashboard – EventPro </title> <link rel=\"stylesheet\" href=\"/css/main.css\" /> <link rel=\"icon\" href=\"da"
+      },
+      "bookings_history": {
+        "path": "/bookings/my",
+        "statusCode": 200,
+        "bytes": 9611,
+        "contentType": "text/html; charset=utf-8",
+        "title": "My Bookings – EventPro",
+        "h1": "My Bookings 📋",
+        "authenticatedDataRendered": true,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title>My Bookings – EventPro</title> <link rel=\"stylesheet\" href=\"/css/main.css\" /> <link rel=\"icon\" href=\"data:image/svg+x"
+      }
+    },
+    "auth": {
+      "statusCode": 302,
+      "cookieName": "connect.sid",
+      "redirectLocation": "/dashboard"
+    }
+  },
+  "axum": {
+    "target": "axum",
+    "port": 3001,
+    "routes": {
+      "catalogue": {
+        "path": "/events",
+        "statusCode": 200,
+        "bytes": 21294,
+        "contentType": "text/html; charset=utf-8",
+        "title": "Discover Events – EventPro",
+        "h1": "Discover Amazing Events",
+        "authenticatedDataRendered": null,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title>Discover Events – EventPro</title> <meta name=\"description\" content=\"Discover and book amazing events near you.\" /> <link rel="
+      },
+      "event_detail": {
+        "path": "/events/1",
+        "statusCode": 200,
+        "bytes": 8895,
+        "contentType": "text/html; charset=utf-8",
+        "title": "SoundWave Music Festival 2025 – EventPro",
+        "h1": "SoundWave Music Festival 2025",
+        "authenticatedDataRendered": null,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title>SoundWave Music Festival 2025 – EventPro</title> <link rel=\"stylesheet\" href=\"/css/main.css\" /> <link rel=\"icon\" href"
+      },
+      "dashboard": {
+        "path": "/dashboard",
+        "statusCode": 200,
+        "bytes": 8071,
+        "contentType": "text/html; charset=utf-8",
+        "title": "Dashboard – EventPro",
+        "h1": "Dashboard",
+        "authenticatedDataRendered": true,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title>Dashboard – EventPro</title> <link rel=\"stylesheet\" href=\"/css/main.css\" /> <link rel=\"icon\" href=\"data:image/svg+xml"
+      },
+      "bookings_history": {
+        "path": "/bookings/my",
+        "statusCode": 200,
+        "bytes": 8824,
+        "contentType": "text/html; charset=utf-8",
+        "title": "My Bookings",
+        "h1": "My Bookings 📋",
+        "authenticatedDataRendered": true,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title>My Bookings</title> <link rel=\"stylesheet\" href=\"/css/main.css\" /> <link rel=\"icon\" href=\"data:image/svg+xml,<svg xml"
+      },
+      "health": {
+        "path": "/health",
+        "statusCode": 200,
+        "bytes": 57,
+        "contentType": "application/json",
+        "title": null,
+        "h1": null,
+        "authenticatedDataRendered": null,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "{\"service\":\"eventpro-rs\",\"status\":\"ok\",\"version\":\"0.1.0\"}"
+      },
+      "ready": {
+        "path": "/ready",
+        "statusCode": 200,
+        "bytes": 41,
+        "contentType": "application/json",
+        "title": null,
+        "h1": null,
+        "authenticatedDataRendered": null,
+        "hasLoginForm": false,
+        "isRedirect": false,
+        "bodySnippet": "{\"database\":\"connected\",\"status\":\"ready\"}"
+      }
+    },
+    "auth": {
+      "statusCode": 303,
+      "cookieName": "eventpro_sid",
+      "redirectLocation": "/dashboard"
+    }
+  }
+}

@@ -24,7 +24,15 @@ cd benchmarks
 npm install
 ```
 
-### 2. Measuring Startup Latency
+### 2. Validating Route & Semantic Correctness
+
+To verify that both backends return HTTP 200 with semantically valid HTML (and that authenticated routes properly render attendee data rather than redirects):
+
+```bash
+node benchmarks/validate_routes.js
+```
+
+### 3. Measuring Startup Latency
 
 To measure cold startup-to-readiness latency (5 clean trials per backend):
 

@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-10-15T09:15:43.871Z",
+  "host": {
+    "platform": "win32",
+    "arch": "arm64",
+    "nodeVersion": "v24.13.0"
+  },
+  "mysql": {
+    "version": "8.0.44",
+    "maxConnections": 151,
+    "bufferPoolSizeBytes": 134217728,
+    "bufferPoolSizeMb": 128,
+    "threadsConnected": 1,
+    "threadsRunning": 2
+  },
+  "defender": {
+    "AntivirusEnabled": true,
+    "RealTimeProtectionEnabled": true
+  },
+  "backgroundProcesses": [
+    {
+      "Id": 5116,
+      "ProcessName": "mysqld",
+      "CPU": null,
+      "WorkingSet64": 15532032
+    },
+    {
+      "Id": 6044,
+      "ProcessName": "mysqld",
+      "CPU": null,
+      "WorkingSet64": 132759552
+    },
+    {
+      "Id": 7224,
+      "ProcessName": "node",
+      "CPU": 0.65625,
+      "WorkingSet64": 40452096
+    },
+    {
+      "Id": 8728,
+      "ProcessName": "node",
+      "CPU": 0.875,
+      "WorkingSet64": 37437440
+    },
+    {
+      "Id": 19980,
+      "ProcessName": "node",
+      "CPU": 0.375,
+      "WorkingSet64": 59650048
+    },
+    {
+      "Id": 21092,
+      "ProcessName": "node",
+      "CPU": 1.1875,
+      "WorkingSet64": 37978112
+    },
+    {
+      "Id": 21560,
+      "ProcessName": "node",
+      "CPU": 1.109375,
+      "WorkingSet64": 37216256
+    }
+  ],
+  "listeningPorts": [
+    "TCP    0.0.0.0:3306           0.0.0.0:0              LISTENING       6044",
+    "TCP    0.0.0.0:33060          0.0.0.0:0              LISTENING       6044",
+    "TCP    [::]:3306              [::]:0                 LISTENING       6044",
+    "TCP    [::]:33060             [::]:0                 LISTENING       6044"
+  ]
+}
