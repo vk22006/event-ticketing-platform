@@ -34,3 +34,13 @@ pub async fn readiness(State(state): State<AppState>) -> impl IntoResponse {
         }
     }
 }
+
+pub async fn db_metrics(State(state): State<AppState>) -> impl IntoResponse {
+    let report = crate::metrics::get_db_metrics_report(&state.db);
+    (StatusCode::OK, Json(report))
+}
+
+pub async fn db_metrics_reset() -> impl IntoResponse {
+    crate::metrics::reset_db_metrics();
+    (StatusCode::OK, Json(json!({ "status": "reset" })))
+}
