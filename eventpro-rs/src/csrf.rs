@@ -29,6 +29,12 @@ pub async fn get_or_create_csrf_token(
     Ok(new_token)
 }
 
+/// Retrieve an existing CSRF token from the session without creating or mutating a session.
+/// Returns None if the session is empty or contains no token.
+pub async fn get_existing_csrf_token(session: &Session) -> Option<String> {
+    session.get::<String>(CSRF_SESSION_KEY).await.ok().flatten()
+}
+
 /// Force generation of a fresh CSRF token (e.g. after login/register or session rotation).
 pub async fn rotate_csrf_token(
     session: &Session,
