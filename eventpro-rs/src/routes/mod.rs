@@ -85,6 +85,8 @@ where
         .route("/admin/dashboard", get(admin::admin_dashboard))
         .route("/health", get(health::liveness))
         .route("/ready", get(health::readiness))
+        .route("/metrics/db", get(health::db_metrics))
+        .route("/metrics/db/reset", post(health::db_metrics_reset))
         .nest("/auth", auth_routes)
         .nest_service("/css", ServeDir::new(public_dir.join("css")))
         .nest_service("/js", ServeDir::new(public_dir.join("js")))
