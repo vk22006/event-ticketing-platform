@@ -96,7 +96,11 @@ impl Event {
 
         query = query.bind(limit).bind(offset);
 
-        query.fetch_all(pool).await
+        let mut conn = crate::metrics::acquire_conn(pool).await?;
+        let q_start = std::time::Instant::now();
+        let res = query.fetch_all(&mut *conn).await;
+        crate::metrics::record_query_duration(q_start.elapsed());
+        res
     }
 
     /// Retrieve full event details including organizer contact information
@@ -112,10 +116,14 @@ impl Event {
                    LEFT JOIN categories c ON e.category_id = c.id \
                    WHERE e.id = ?";
 
-        sqlx::query_as::<_, Event>(sql)
+        let mut conn = crate::metrics::acquire_conn(pool).await?;
+        let q_start = std::time::Instant::now();
+        let res = sqlx::query_as::<_, Event>(sql)
             .bind(id)
-            .fetch_optional(pool)
-            .await
+            .fetch_optional(&mut *conn)
+            .await;
+        crate::metrics::record_query_duration(q_start.elapsed());
+        res
     }
 
     /// Retrieve all events owned by a specific organizer ordered by created_at DESC
