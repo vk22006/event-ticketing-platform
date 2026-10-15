@@ -1,0 +1,36 @@
+<nav class="navbar">
+    <div class="container">
+        <div class="navbar__inner">
+            <a href="/events" class="navbar__brand">
+                <span class="navbar__brand-icon">🎫</span>
+                Event<span>Pro</span>
+            </a>
+
+            <ul class="navbar__nav">
+                <li><a href="/events">Discover</a></li>
+                {% if user and (user.role == "organizer" or user.role == "admin") %}
+                    <li><a href="/events/create">Create Event</a></li>
+                {% endif %}
+                {% if user and user.role == "admin" %}
+                    <li><a href="/admin/dashboard">Admin</a></li>
+                {% endif %}
+            </ul>
+
+            <div class="navbar__actions">
+                {% if user %}
+                    <span class="role-badge role-badge--{{ user.role }}">
+                        {{ user.role }}
+                    </span>
+                    <a href="/dashboard" class="btn btn-ghost btn-sm">Dashboard</a>
+                    <form action="/auth/logout" method="POST" style="display:inline;margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+                    </form>
+                {% else %}
+                    <a href="/auth/login" class="btn btn-ghost btn-sm">Login</a>
+                    <a href="/auth/register" class="btn btn-primary btn-sm">Sign Up</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</nav>

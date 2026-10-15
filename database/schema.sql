@@ -110,3 +110,8 @@ CREATE INDEX idx_events_date     ON events(event_date);
 CREATE INDEX idx_bookings_user   ON bookings(user_id);
 CREATE INDEX idx_bookings_event  ON bookings(event_id);
 CREATE INDEX idx_tickets_code    ON tickets(ticket_code);
+
+-- Composite indexes for query plan optimization
+CREATE INDEX idx_bookings_user_booked ON bookings(user_id, booked_at DESC);
+CREATE INDEX idx_events_organizer_created ON events(organizer_id, created_at DESC);
+

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title | default("Discover Events") }} – EventPro</title>
+    <meta name="description" content="Discover and book amazing events near you." />
+    <link rel="stylesheet" href="/css/main.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>" />
+</head>
+
+<body>
+
+    {% include "partials/navbar.html" %}
+
+    <!-- ── Hero ─────────────────────────────────────────────── -->
+    <section class="page-hero">
+        <div class="container">
+            <h1 class="text-gradient">Discover Amazing Events</h1>
+            <p>From music festivals to tech conferences — find, book, and experience it all.</p>
+        </div>
+    </section>
+
+    <!-- ── Filter Bar ────────────────────────────────────────── -->
+    <div class="container">
+        <form class="filter-bar" method="GET" action="/events" id="filterForm">
+            <input type="text" name="search" placeholder="⌕ Search events..." value="{{ query.search | default('') }}" />
+            <select name="category_id" onchange="this.form.submit()">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if query.category_id and query.category_id == cat.id %}selected{% endif %}>
+                        {{ cat.icon | default('🎫') }} {{ cat.name }}
+                    </option>
+                {% endfor %}
+            </select>
+            <input type="text" name="city" placeholder=" City" value="{{ query.city | default('') }}" />
+            <button type="submit" class="btn btn-primary btn-sm">Search</button>
+            {% if query.search or query.category_id or query.city %}
+                <a href="/events" class="btn btn-ghost btn-sm">Clear</a>
+            {% endif %}
+        </form>
+
+        <!-- ── Events Grid ──────────────────────────────────────── -->
+        {% if events | length == 0 %}
+            <div class="empty-state fade-in-up">
+                <div class="empty-state__icon">🎭</div>
+                <h3>No events found</h3>
+                <p>Try different search terms or clear your filters.</p>
+                <a href="/events" class="btn btn-outline mt-3">Browse All Events</a>
+            </div>
+        {% else %}
+            <div class="events-grid">
+                {% for event in events %}
+                    <article class="card fade-in-up" style="animation-delay: {{ loop.index0 * 0.07 }}s">
+                        <div class="card__image">
+                            {% if event.banner_image %}
+                                <img src="{{ event.banner_image }}" alt="{{ event.title }}"
+                                    style="width:100%;height:200px;object-fit:cover;" />
+                            {% else %}
+                                <span style="font-size:3.5rem">
+                                    {{ event.category_icon | default('🎫') }}
+                                </span>
+                            {% endif %}
+                        </div>
+                        <div class="card__body">
+                            <div class="card__meta">
+                                {% if event.category_name %}
+                                    <span class="badge badge-purple">
+                                        {{ event.category_icon | default('🎫') }}
+                                        {{ event.category_name }}
+                                    </span>
+                                {% endif %}
+                                {% if event.ticket_price == 0 %}
+                                    <span class="badge badge-green">Free</span>
+                                {% else %}
+                                    <span class="badge badge-amber">₹{{ event.ticket_price }}</span>
+                                {% endif %}
+                            </div>
+                            <h2 class="card__title">
+                                {{ event.title }}
+                            </h2>
+                            <p class="text-sm text-muted mb-2">
+                                📅 {{ event.event_date | date_short }}
+                            </p>
+                            <p class="text-sm text-muted">
+                                📍 {% if event.venue %}{{ event.venue }}, {% endif %}{{ event.city | default('') }}
+                            </p>
+                        </div>
+                        <div class="card__footer">
+                            <span class="text-sm text-muted">
+                                🎟️ {{ event.available_seats }} seats left
+                            </span>
+                            <a href="/events/{{ event.id }}" class="btn btn-primary btn-sm">View Event</a>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    {% include "partials/footer.html" %}
+    <script src="/js/main.js"></script>
+</body>
+
+</html>

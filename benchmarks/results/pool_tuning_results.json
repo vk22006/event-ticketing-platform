@@ -1,0 +1,200 @@
+[
+  {
+    "poolLimit": 10,
+    "concurrency": 10,
+    "durationSec": 10,
+    "load": {
+      "rps": 3427.2,
+      "p50": 2,
+      "p95": 4,
+      "p99": 7.6,
+      "requests": 34323,
+      "errors": 0
+    },
+    "dbInstrumentation": {
+      "pool": {
+        "size": 10,
+        "num_idle": 10,
+        "num_active": 0
+      },
+      "acquire": {
+        "count": 68646,
+        "avg_ms": 0.18,
+        "max_ms": 19.729,
+        "distribution": {
+          "5-10ms": 14,
+          "50-100ms": 0,
+          "1-5ms": 524,
+          "<1ms": 68100,
+          "25-50ms": 0,
+          "10-25ms": 8,
+          ">=100ms": 0
+        }
+      },
+      "query": {
+        "count": 68646,
+        "avg_ms": 0.31,
+        "max_ms": 25.001,
+        "distribution": {
+          ">=25ms": 1,
+          "1-5ms": 271,
+          "<1ms": 68364,
+          "10-25ms": 6,
+          "5-10ms": 4
+        }
+      }
+    },
+    "mysql": {
+      "initialStatus": {
+        "Max_used_connections": 28,
+        "Questions": 3926516,
+        "Slow_queries": 0,
+        "Threads_connected": 2,
+        "Threads_running": 2
+      },
+      "finalStatus": {
+        "Max_used_connections": 28,
+        "Questions": 4014803,
+        "Slow_queries": 0,
+        "Threads_connected": 11,
+        "Threads_running": 2
+      },
+      "threadsConnected": 11,
+      "threadsRunning": 2,
+      "maxUsedConnections": 28,
+      "mysqlCpuDeltaSeconds": 0
+    }
+  },
+  {
+    "poolLimit": 20,
+    "concurrency": 10,
+    "durationSec": 10,
+    "load": {
+      "rps": 3583.1,
+      "p50": 2,
+      "p95": 3.7,
+      "p99": 5.9,
+      "requests": 36089,
+      "errors": 0
+    },
+    "dbInstrumentation": {
+      "pool": {
+        "size": 20,
+        "num_idle": 20,
+        "num_active": 0
+      },
+      "acquire": {
+        "count": 72178,
+        "avg_ms": 0.16,
+        "max_ms": 16.392,
+        "distribution": {
+          ">=100ms": 0,
+          "<1ms": 71893,
+          "1-5ms": 261,
+          "10-25ms": 2,
+          "50-100ms": 0,
+          "5-10ms": 22,
+          "25-50ms": 0
+        }
+      },
+      "query": {
+        "count": 72178,
+        "avg_ms": 0.32,
+        "max_ms": 7.852,
+        "distribution": {
+          "10-25ms": 0,
+          ">=25ms": 0,
+          "<1ms": 71715,
+          "1-5ms": 445,
+          "5-10ms": 18
+        }
+      }
+    },
+    "mysql": {
+      "initialStatus": {
+        "Max_used_connections": 28,
+        "Questions": 4014810,
+        "Slow_queries": 0,
+        "Threads_connected": 2,
+        "Threads_running": 2
+      },
+      "finalStatus": {
+        "Max_used_connections": 28,
+        "Questions": 4108807,
+        "Slow_queries": 0,
+        "Threads_connected": 21,
+        "Threads_running": 2
+      },
+      "threadsConnected": 21,
+      "threadsRunning": 2,
+      "maxUsedConnections": 28,
+      "mysqlCpuDeltaSeconds": 0
+    }
+  },
+  {
+    "poolLimit": 30,
+    "concurrency": 10,
+    "durationSec": 10,
+    "load": {
+      "rps": 3630,
+      "p50": 1.9,
+      "p95": 3.8,
+      "p99": 6.2,
+      "requests": 36688,
+      "errors": 0
+    },
+    "dbInstrumentation": {
+      "pool": {
+        "size": 28,
+        "num_idle": 28,
+        "num_active": 0
+      },
+      "acquire": {
+        "count": 73376,
+        "avg_ms": 0.15,
+        "max_ms": 170.617,
+        "distribution": {
+          "5-10ms": 8,
+          "10-25ms": 8,
+          "25-50ms": 1,
+          ">=100ms": 4,
+          "50-100ms": 0,
+          "1-5ms": 121,
+          "<1ms": 73234
+        }
+      },
+      "query": {
+        "count": 73376,
+        "avg_ms": 0.32,
+        "max_ms": 17.399,
+        "distribution": {
+          "<1ms": 72884,
+          "1-5ms": 479,
+          "10-25ms": 4,
+          ">=25ms": 0,
+          "5-10ms": 9
+        }
+      }
+    },
+    "mysql": {
+      "initialStatus": {
+        "Max_used_connections": 28,
+        "Questions": 4108814,
+        "Slow_queries": 0,
+        "Threads_connected": 2,
+        "Threads_running": 2
+      },
+      "finalStatus": {
+        "Max_used_connections": 29,
+        "Questions": 4202537,
+        "Slow_queries": 0,
+        "Threads_connected": 29,
+        "Threads_running": 2
+      },
+      "threadsConnected": 29,
+      "threadsRunning": 2,
+      "maxUsedConnections": 29,
+      "mysqlCpuDeltaSeconds": 0
+    }
+  }
+]

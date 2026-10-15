@@ -1,0 +1,890 @@
+{
+  "timestamp": "2026-10-15T15:21:41.281Z",
+  "binaryHash": "F573E471904B2CC65DAB79DC02F32C7D67617BF5B3DAABC340D232424FA9A841",
+  "binaryPath": "C:\\Users\\Kishore\\Documents\\Projects\\End-to-end-Event-Lifecycle\\eventpro-rs\\target\\release\\eventpro.exe",
+  "environment": {
+    "appEnv": "production",
+    "port": "3001",
+    "dbPoolMax": "10",
+    "numLogicalCores": 8
+  },
+  "workloads": {
+    "catalogue": {
+      "name": "Public Event Catalogue",
+      "url": "http://127.0.0.1:3001/events",
+      "tiers": {
+        "c_1": {
+          "concurrency": 1,
+          "throughputRps": 1809.2,
+          "totalRequests": 19901,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "avg": 0.01
+          },
+          "resources": {
+            "cpuPercent": 7.84,
+            "workingSetMb": 13.12
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 4,
+              "num_idle": 4,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 39804,
+              "avg_ms": 0.06,
+              "max_ms": 14.242,
+              "distribution": {
+                ">=100ms": 0,
+                "1-5ms": 0,
+                "5-10ms": 0,
+                "10-25ms": 1,
+                "<1ms": 39803,
+                "25-50ms": 0,
+                "50-100ms": 0
+              }
+            },
+            "query": {
+              "count": 39803,
+              "avg_ms": 0.22,
+              "max_ms": 18.156,
+              "distribution": {
+                "1-5ms": 4,
+                "5-10ms": 0,
+                "<1ms": 39798,
+                "10-25ms": 1,
+                ">=25ms": 0
+              }
+            }
+          }
+        },
+        "c_10": {
+          "concurrency": 10,
+          "throughputRps": 7527.8,
+          "totalRequests": 75272,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 1,
+            "p95": 1.7,
+            "p99": 2,
+            "avg": 0.99
+          },
+          "resources": {
+            "cpuPercent": 35.69,
+            "workingSetMb": 28.57
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 150564,
+              "avg_ms": 0.12,
+              "max_ms": 5.337,
+              "distribution": {
+                "10-25ms": 0,
+                ">=100ms": 0,
+                "5-10ms": 2,
+                "<1ms": 150067,
+                "50-100ms": 0,
+                "1-5ms": 495,
+                "25-50ms": 0
+              }
+            },
+            "query": {
+              "count": 150564,
+              "avg_ms": 0.22,
+              "max_ms": 4.711,
+              "distribution": {
+                "1-5ms": 230,
+                ">=25ms": 0,
+                "10-25ms": 0,
+                "<1ms": 150334,
+                "5-10ms": 0
+              }
+            }
+          }
+        },
+        "c_25": {
+          "concurrency": 25,
+          "throughputRps": 7466.4,
+          "totalRequests": 74658,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 3,
+            "p95": 4,
+            "p99": 5,
+            "avg": 2.84
+          },
+          "resources": {
+            "cpuPercent": 33.6,
+            "workingSetMb": 29.95
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 149366,
+              "avg_ms": 0.08,
+              "max_ms": 1.884,
+              "distribution": {
+                "25-50ms": 0,
+                "5-10ms": 0,
+                "10-25ms": 0,
+                "50-100ms": 0,
+                "<1ms": 149337,
+                "1-5ms": 29,
+                ">=100ms": 0
+              }
+            },
+            "query": {
+              "count": 149366,
+              "avg_ms": 0.21,
+              "max_ms": 1.777,
+              "distribution": {
+                "10-25ms": 0,
+                "1-5ms": 24,
+                ">=25ms": 0,
+                "<1ms": 149342,
+                "5-10ms": 0
+              }
+            }
+          }
+        },
+        "c_50": {
+          "concurrency": 50,
+          "throughputRps": 7021.2,
+          "totalRequests": 70201,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 6,
+            "p95": 9.3,
+            "p99": 12,
+            "avg": 6.65
+          },
+          "resources": {
+            "cpuPercent": 34.17,
+            "workingSetMb": 27.16
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 140502,
+              "avg_ms": 0.96,
+              "max_ms": 29.942,
+              "distribution": {
+                "1-5ms": 11646,
+                "5-10ms": 12786,
+                "10-25ms": 19,
+                "<1ms": 116049,
+                "25-50ms": 2,
+                "50-100ms": 0,
+                ">=100ms": 0
+              }
+            },
+            "query": {
+              "count": 140502,
+              "avg_ms": 0.23,
+              "max_ms": 11.702,
+              "distribution": {
+                ">=25ms": 0,
+                "1-5ms": 438,
+                "10-25ms": 2,
+                "5-10ms": 18,
+                "<1ms": 140044
+              }
+            }
+          }
+        }
+      }
+    },
+    "event_detail": {
+      "name": "Event Detail Page",
+      "url": "http://127.0.0.1:3001/events/1",
+      "tiers": {
+        "c_1": {
+          "concurrency": 1,
+          "throughputRps": 2994,
+          "totalRequests": 29935,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "avg": 0.01
+          },
+          "resources": {
+            "cpuPercent": 9.06,
+            "workingSetMb": 17.97
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 59872,
+              "avg_ms": 0.05,
+              "max_ms": 0.567,
+              "distribution": {
+                ">=100ms": 0,
+                "<1ms": 59872,
+                "5-10ms": 0,
+                "1-5ms": 0,
+                "10-25ms": 0,
+                "50-100ms": 0,
+                "25-50ms": 0
+              }
+            },
+            "query": {
+              "count": 59872,
+              "avg_ms": 0.14,
+              "max_ms": 1.107,
+              "distribution": {
+                "<1ms": 59871,
+                "1-5ms": 1,
+                ">=25ms": 0,
+                "10-25ms": 0,
+                "5-10ms": 0
+              }
+            }
+          }
+        },
+        "c_10": {
+          "concurrency": 10,
+          "throughputRps": 10234.5,
+          "totalRequests": 112566,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 0,
+            "p95": 1,
+            "p99": 2,
+            "avg": 0.34
+          },
+          "resources": {
+            "cpuPercent": 40.96,
+            "workingSetMb": 16.24
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 9,
+              "num_idle": 9,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 225148,
+              "avg_ms": 0.41,
+              "max_ms": 11.099,
+              "distribution": {
+                "5-10ms": 23,
+                "25-50ms": 0,
+                "50-100ms": 0,
+                ">=100ms": 0,
+                "1-5ms": 3132,
+                "<1ms": 221990,
+                "10-25ms": 3
+              }
+            },
+            "query": {
+              "count": 225145,
+              "avg_ms": 0.19,
+              "max_ms": 10.56,
+              "distribution": {
+                "5-10ms": 7,
+                "10-25ms": 1,
+                "<1ms": 224417,
+                ">=25ms": 0,
+                "1-5ms": 720
+              }
+            }
+          }
+        },
+        "c_25": {
+          "concurrency": 25,
+          "throughputRps": 9741.6,
+          "totalRequests": 97406,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 2,
+            "p95": 3,
+            "p99": 4,
+            "avg": 2.14
+          },
+          "resources": {
+            "cpuPercent": 38.08,
+            "workingSetMb": 18.7
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 8,
+              "num_idle": 8,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 194830,
+              "avg_ms": 0.39,
+              "max_ms": 5.835,
+              "distribution": {
+                "25-50ms": 0,
+                "50-100ms": 0,
+                ">=100ms": 0,
+                "<1ms": 161802,
+                "10-25ms": 0,
+                "1-5ms": 33027,
+                "5-10ms": 1
+              }
+            },
+            "query": {
+              "count": 194823,
+              "avg_ms": 0.16,
+              "max_ms": 3.255,
+              "distribution": {
+                "<1ms": 194737,
+                "10-25ms": 0,
+                ">=25ms": 0,
+                "5-10ms": 0,
+                "1-5ms": 86
+              }
+            }
+          }
+        },
+        "c_50": {
+          "concurrency": 50,
+          "throughputRps": 9203,
+          "totalRequests": 92023,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 5,
+            "p95": 6.7,
+            "p99": 9,
+            "avg": 4.91
+          },
+          "resources": {
+            "cpuPercent": 36.28,
+            "workingSetMb": 19.42
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 184146,
+              "avg_ms": 0.1,
+              "max_ms": 2.201,
+              "distribution": {
+                "<1ms": 184047,
+                "5-10ms": 0,
+                "25-50ms": 0,
+                "1-5ms": 99,
+                "10-25ms": 0,
+                ">=100ms": 0,
+                "50-100ms": 0
+              }
+            },
+            "query": {
+              "count": 184146,
+              "avg_ms": 0.16,
+              "max_ms": 7.228,
+              "distribution": {
+                ">=25ms": 0,
+                "<1ms": 184108,
+                "1-5ms": 36,
+                "5-10ms": 2,
+                "10-25ms": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "dashboard": {
+      "name": "Authenticated Dashboard",
+      "url": "http://127.0.0.1:3001/dashboard",
+      "tiers": {
+        "c_1": {
+          "concurrency": 1,
+          "throughputRps": 1431.7,
+          "totalRequests": 14317,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 0,
+            "p95": 0.7,
+            "p99": 1,
+            "avg": 0.09
+          },
+          "resources": {
+            "cpuPercent": 6.19,
+            "workingSetMb": 16.33
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 14318,
+              "avg_ms": 0.06,
+              "max_ms": 4.354,
+              "distribution": {
+                "10-25ms": 0,
+                "<1ms": 14316,
+                "25-50ms": 0,
+                ">=100ms": 0,
+                "50-100ms": 0,
+                "1-5ms": 2,
+                "5-10ms": 0
+              }
+            },
+            "query": {
+              "count": 14318,
+              "avg_ms": 0.25,
+              "max_ms": 2.855,
+              "distribution": {
+                "10-25ms": 0,
+                ">=25ms": 0,
+                "5-10ms": 0,
+                "1-5ms": 8,
+                "<1ms": 14310
+              }
+            }
+          }
+        },
+        "c_10": {
+          "concurrency": 10,
+          "throughputRps": 10064.4,
+          "totalRequests": 110700,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 0,
+            "p95": 1,
+            "p99": 2,
+            "avg": 0.38
+          },
+          "resources": {
+            "cpuPercent": 38.83,
+            "workingSetMb": 16.88
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 8,
+              "num_idle": 8,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 110706,
+              "avg_ms": 0.16,
+              "max_ms": 4.6,
+              "distribution": {
+                "<1ms": 110503,
+                "5-10ms": 0,
+                "10-25ms": 0,
+                "25-50ms": 0,
+                "50-100ms": 0,
+                "1-5ms": 203,
+                ">=100ms": 0
+              }
+            },
+            "query": {
+              "count": 110704,
+              "avg_ms": 0.23,
+              "max_ms": 4.118,
+              "distribution": {
+                "5-10ms": 0,
+                ">=25ms": 0,
+                "<1ms": 110340,
+                "10-25ms": 0,
+                "1-5ms": 364
+              }
+            }
+          }
+        },
+        "c_25": {
+          "concurrency": 25,
+          "throughputRps": 8875.4,
+          "totalRequests": 88752,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 2,
+            "p95": 3.7,
+            "p99": 5,
+            "avg": 2.36
+          },
+          "resources": {
+            "cpuPercent": 35.47,
+            "workingSetMb": 22.57
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 88761,
+              "avg_ms": 0.51,
+              "max_ms": 6.688,
+              "distribution": {
+                "<1ms": 77699,
+                "50-100ms": 0,
+                "5-10ms": 6,
+                "25-50ms": 0,
+                "1-5ms": 11056,
+                "10-25ms": 0,
+                ">=100ms": 0
+              }
+            },
+            "query": {
+              "count": 88760,
+              "avg_ms": 0.24,
+              "max_ms": 5.671,
+              "distribution": {
+                "10-25ms": 0,
+                ">=25ms": 0,
+                "1-5ms": 352,
+                "5-10ms": 1,
+                "<1ms": 88407
+              }
+            }
+          }
+        },
+        "c_50": {
+          "concurrency": 50,
+          "throughputRps": 8468.4,
+          "totalRequests": 84674,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 5,
+            "p95": 7.7,
+            "p99": 8,
+            "avg": 5.4
+          },
+          "resources": {
+            "cpuPercent": 34.2,
+            "workingSetMb": 21.27
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 84724,
+              "avg_ms": 0.09,
+              "max_ms": 2.453,
+              "distribution": {
+                ">=100ms": 0,
+                "5-10ms": 0,
+                "25-50ms": 0,
+                "10-25ms": 0,
+                "<1ms": 84681,
+                "1-5ms": 43,
+                "50-100ms": 0
+              }
+            },
+            "query": {
+              "count": 84724,
+              "avg_ms": 0.21,
+              "max_ms": 4.153,
+              "distribution": {
+                ">=25ms": 0,
+                "<1ms": 84691,
+                "5-10ms": 0,
+                "10-25ms": 0,
+                "1-5ms": 33
+              }
+            }
+          }
+        }
+      }
+    },
+    "my_bookings": {
+      "name": "Booking History (/bookings/my)",
+      "url": "http://127.0.0.1:3001/bookings/my",
+      "tiers": {
+        "c_1": {
+          "concurrency": 1,
+          "throughputRps": 1469.9,
+          "totalRequests": 14699,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 0,
+            "p95": 0.7,
+            "p99": 1,
+            "avg": 0.07
+          },
+          "resources": {
+            "cpuPercent": 6.44,
+            "workingSetMb": 20.4
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 14700,
+              "avg_ms": 0.06,
+              "max_ms": 11.052,
+              "distribution": {
+                "5-10ms": 0,
+                "25-50ms": 0,
+                "<1ms": 14698,
+                "50-100ms": 0,
+                ">=100ms": 0,
+                "10-25ms": 1,
+                "1-5ms": 1
+              }
+            },
+            "query": {
+              "count": 14700,
+              "avg_ms": 0.24,
+              "max_ms": 3.284,
+              "distribution": {
+                "<1ms": 14696,
+                "1-5ms": 4,
+                "5-10ms": 0,
+                "10-25ms": 0,
+                ">=25ms": 0
+              }
+            }
+          }
+        },
+        "c_10": {
+          "concurrency": 10,
+          "throughputRps": 9763.3,
+          "totalRequests": 107380,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 0,
+            "p95": 1.7,
+            "p99": 2,
+            "avg": 0.41
+          },
+          "resources": {
+            "cpuPercent": 38.46,
+            "workingSetMb": 45.59
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 9,
+              "num_idle": 9,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 107389,
+              "avg_ms": 0.18,
+              "max_ms": 11.361,
+              "distribution": {
+                ">=100ms": 0,
+                "50-100ms": 0,
+                "5-10ms": 5,
+                "<1ms": 107033,
+                "10-25ms": 1,
+                "1-5ms": 350,
+                "25-50ms": 0
+              }
+            },
+            "query": {
+              "count": 107383,
+              "avg_ms": 0.25,
+              "max_ms": 13.507,
+              "distribution": {
+                "1-5ms": 653,
+                "5-10ms": 3,
+                ">=25ms": 0,
+                "10-25ms": 4,
+                "<1ms": 106723
+              }
+            }
+          }
+        },
+        "c_25": {
+          "concurrency": 25,
+          "throughputRps": 8953.8,
+          "totalRequests": 89530,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 2,
+            "p95": 3.7,
+            "p99": 5,
+            "avg": 2.33
+          },
+          "resources": {
+            "cpuPercent": 36.99,
+            "workingSetMb": 54.2
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 7,
+              "num_idle": 7,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 89537,
+              "avg_ms": 0.46,
+              "max_ms": 40.896,
+              "distribution": {
+                "50-100ms": 0,
+                "<1ms": 81006,
+                "1-5ms": 8494,
+                "25-50ms": 6,
+                "5-10ms": 18,
+                ">=100ms": 0,
+                "10-25ms": 13
+              }
+            },
+            "query": {
+              "count": 89534,
+              "avg_ms": 0.23,
+              "max_ms": 38.572,
+              "distribution": {
+                "10-25ms": 3,
+                "<1ms": 89226,
+                "5-10ms": 6,
+                ">=25ms": 2,
+                "1-5ms": 297
+              }
+            }
+          }
+        },
+        "c_50": {
+          "concurrency": 50,
+          "throughputRps": 9005.8,
+          "totalRequests": 90034,
+          "errors": 0,
+          "timeouts": 0,
+          "non2xx": 0,
+          "latency": {
+            "p50": 5,
+            "p95": 6.7,
+            "p99": 8,
+            "avg": 5.02
+          },
+          "resources": {
+            "cpuPercent": 36.71,
+            "workingSetMb": 53.8
+          },
+          "dbTelemetry": {
+            "pool": {
+              "configured_max": 10,
+              "size": 10,
+              "num_idle": 10,
+              "num_active": 0
+            },
+            "acquire": {
+              "count": 90084,
+              "avg_ms": 0.09,
+              "max_ms": 3.012,
+              "distribution": {
+                "50-100ms": 0,
+                "1-5ms": 191,
+                "5-10ms": 0,
+                "10-25ms": 0,
+                ">=100ms": 0,
+                "25-50ms": 0,
+                "<1ms": 89893
+              }
+            },
+            "query": {
+              "count": 90084,
+              "avg_ms": 0.21,
+              "max_ms": 3.862,
+              "distribution": {
+                "5-10ms": 0,
+                ">=25ms": 0,
+                "<1ms": 90058,
+                "1-5ms": 26,
+                "10-25ms": 0
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "bookingWorkflow": {
+    "eventId": 97,
+    "cycles": 30,
+    "successfulCycles": 30,
+    "errors": 0,
+    "totalElapsedSec": 0.24,
+    "cycleRps": 126.05,
+    "seatInvariancePreserved": true,
+    "bookLatencies": {
+      "p50": 4,
+      "p95": 5,
+      "p99": 8,
+      "avg": 3.7
+    },
+    "cancelLatencies": {
+      "p50": 3,
+      "p95": 5,
+      "p99": 6,
+      "avg": 3.17
+    }
+  }
+}

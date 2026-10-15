@@ -1,4 +1,10 @@
+.sf/
 node_modules/
 review_presentation/
+eventpro-rs/target/
 .env
 *.log
+# Exclude dynamic uploaded banner files, but keep seed assets
+public/uploads/event-*-*.*
+
+
