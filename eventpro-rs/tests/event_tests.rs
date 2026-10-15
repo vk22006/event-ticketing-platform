@@ -778,6 +778,10 @@ async fn test_real_mysql_catalogue_and_detail_integration() {
         .await
         .unwrap();
     assert_eq!(cat_resp.status(), StatusCode::OK);
+    assert!(
+        cat_resp.headers().get(header::SET_COOKIE).is_none(),
+        "Anonymous GET /events must not create a session or return Set-Cookie"
+    );
     let cat_body = to_bytes(cat_resp.into_body(), 128 * 1024).await.unwrap();
     let cat_html = String::from_utf8_lossy(&cat_body);
     assert!(cat_html.contains("Discover Amazing Events"));
@@ -795,6 +799,10 @@ async fn test_real_mysql_catalogue_and_detail_integration() {
         .await
         .unwrap();
     assert_eq!(ev1_resp.status(), StatusCode::OK);
+    assert!(
+        ev1_resp.headers().get(header::SET_COOKIE).is_none(),
+        "Anonymous GET /events/1 must not create a session or return Set-Cookie"
+    );
     let ev1_body = to_bytes(ev1_resp.into_body(), 128 * 1024).await.unwrap();
     let ev1_html = String::from_utf8_lossy(&ev1_body);
     assert!(ev1_html.contains(&event1.title));
@@ -829,4 +837,61 @@ async fn test_real_mysql_catalogue_and_detail_integration() {
         .await
         .unwrap();
     assert_eq!(ev_none_resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_anonymous_catalogue_does_not_create_session() {
+    let pool = match common::get_test_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    let public_dir = resolve_public_dir().expect("public dir");
+    let upload_dir = public_dir.join("uploads");
+    let config = AppConfig {
+        host: "127.0.0.1".to_string(),
+        port: 3001,
+        database_url: "mysql://[REDACTED]".to_string(),
+        session_secret: "integration_test_secret_key_12345678".to_string(),
+        app_env: "test".to_string(),
+        public_dir,
+        upload_dir,
+    };
+    let state = AppState::new(pool, config);
+    let app = create_test_app(state);
+
+    // 1. Anonymous request to /events
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/events")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        resp.headers().get(header::SET_COOKIE).is_none(),
+        "Anonymous GET /events must NOT set session cookie"
+    );
+
+    // 2. Anonymous request to /events/1
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/events/1")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(
+        resp.headers().get(header::SET_COOKIE).is_none(),
+        "Anonymous GET /events/1 must NOT set session cookie"
+    );
 }
