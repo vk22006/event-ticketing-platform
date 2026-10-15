@@ -1,5 +1,7 @@
 use crate::{
-    csrf::{csrf_error_response, get_or_create_csrf_token, validate_csrf_token},
+    csrf::{
+        csrf_error_response, get_existing_csrf_token, get_or_create_csrf_token, validate_csrf_token,
+    },
     middleware::{forbidden_response, AuthenticatedUser, OptionalUser},
     models::{
         Category, CreateEventParams, Event, EventFilterParams, SeatType, UpdateEventParams, User,
@@ -192,7 +194,16 @@ pub async fn list_events(
 
     match tokio::try_join!(events_future, categories_future) {
         Ok((events, categories)) => {
-            let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
+            let is_baseline = std::env::var("BASELINE_CSRF")
+                .map(|v| v == "1" || v == "true")
+                .unwrap_or(false);
+            let csrf_token = if is_baseline {
+                get_or_create_csrf_token(&session).await.unwrap_or_default()
+            } else if user.0.is_some() {
+                get_existing_csrf_token(&session).await.unwrap_or_default()
+            } else {
+                String::new()
+            };
             let query_context = minijinja::context! {
                 category_id => category_id,
                 city => city.unwrap_or_default(),
@@ -250,7 +261,16 @@ pub async fn show_event(
                 return render_404(&state, user.0);
             }
 
-            let csrf_token = get_or_create_csrf_token(&session).await.unwrap_or_default();
+            let is_baseline = std::env::var("BASELINE_CSRF")
+                .map(|v| v == "1" || v == "true")
+                .unwrap_or(false);
+            let csrf_token = if is_baseline {
+                get_or_create_csrf_token(&session).await.unwrap_or_default()
+            } else if user.0.is_some() {
+                get_existing_csrf_token(&session).await.unwrap_or_default()
+            } else {
+                String::new()
+            };
             let context = minijinja::context! {
                 title => event.title,
                 event => event,
