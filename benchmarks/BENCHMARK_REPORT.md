@@ -12,13 +12,13 @@ Both applications were evaluated under identical production configurations again
 
 ### Key Measured Outcomes
 
-- **Targeted Public GET Optimization**: Eliminating unnecessary CSRF token and session creation on public read routes increased single-client throughput on `/events` from **210.7 RPS (±24.0) to 911.2 RPS (±174.7) (+332.5% increase / 4.3x gain)** while reducing median latency from 4.6 ms to **1.0 ms**. At concurrency 10, throughput increased from **1,677.0 RPS (±163.2) to 2,968.9 RPS (±179.5) (+77.0% increase)**, outperforming Express by **4.9x** while reducing median latency from 5.1 ms to **2.2 ms**.
-- **Session-Store Write Elimination**: Empirical database instrumentation confirmed that unauthenticated requests to `/events` and `/events/1` produce **0 session writes in MySQL post-fix** (down from 1 INSERT per request before the fix).
-- **Physical Memory Footprint**: Axum operated with a Windows Process Working Set between **13.8 MB and 16.1 MB** post-fix, compared to **213.7 MB to 283.8 MB for Express**—a consistent **~93% to 95% reduction in physical RAM consumption**.
+- **Targeted Public GET Optimization (Phase 1)**: Eliminating unintended session mutation on public read routes reduced MySQL session inserts to **0 writes per request** on `/events` and `/events/1`. In controlled testing, single-client throughput on `/events` increased from **210.7 RPS (±24.0) to 911.2 RPS (±174.7) (+332.5% increase / 4.3x intra-Axum gain)** while reducing median latency from 4.6 ms to **1.0 ms**. In the final reconciled multi-trial harness, `/events` sustained **8,134.2 ± 924.2 RPS** at concurrency 10. Express achieved 607.4 RPS under its initial harness; cross-harness throughput comparisons should be interpreted in light of different harness configurations and session architectures rather than direct multipliers.
+- **Authenticated Session Identity Caching & Composite Indexing (Phase 2 & 3)**: Storing compact serialized user identity directly in persistent sessions and adding composite indexes (`idx_bookings_user_booked`, `idx_events_organizer_created`) reduced total database queries on authenticated routes by **40% to 47%**. In the 5-round alternating validation suite, Booking History (`/bookings/my`) throughput increased by **+20% to +36%** across all concurrency tiers (reaching **5,573.6 ± 439.0 RPS** at C=10 vs 4,091.8 ± 442.6 RPS baseline), with median latency halved from 2.0 ms to **1.0 ms**. Authenticated Dashboard (`/dashboard`) reached **4,924.5 ± 504.7 RPS** at C=10 (with total queries per run dropping from 18,721 to 9,856).
+- **Physical Memory Footprint**: Axum operated with a Windows Process Working Set between **13.8 MB and 16.1 MB**, compared to **213.7 MB to 283.8 MB for Express**—a consistent **~93% to 95% reduction in physical RAM consumption**.
 - **Cold Startup-to-Readiness**: Axum initialized and served HTTP traffic in **121.5 ms vs 358.7 ms for Express** (**3.0x faster / 66.1% reduction**, measured across 5 independent trials from process spawn to first HTTP 200).
-- **Deployment Footprint**: The compiled Axum standalone executable is **7.18 MB**, representing a compact self-contained binary, compared to an 8.52 MB `node_modules` folder and ~76.5 MB for a full Node.js distribution.
-- **Authenticated Route Architecture Trade-Off**: On authenticated routes (`/dashboard`, `/bookings/my`), Express achieved higher raw RPS (1,600–2,000 RPS vs 160–375 RPS for Axum). This regression is strictly architectural: Express relied on an ephemeral, single-process in-memory session store (`MemoryStore`, 0 database operations), whereas Axum enforced persistent, durable database sessions (`tower_sessions_sqlx_store`, 3 DB queries per request). Under high concurrency (25–50 VUs), Axum queued up to 150 concurrent queries against a fixed 10-connection MySQL pool.
-- **Zero Errors**: Both backends maintained **100% request reliability (0 HTTP errors, 0 timeouts)** across all trials and concurrency tiers.
+- **Deployment Footprint**: The compiled Axum standalone executable is **7.18 MB**, representing a compact self-contained binary requiring no external runtime, compared to an 8.52 MB `node_modules` folder and ~76.5 MB for a full Node.js distribution.
+- **Architectural Session Trade-Off**: On authenticated routes, early Express runs recorded higher raw RPS (1,600–2,000 RPS) because Express relied on an ephemeral, in-memory session store (`MemoryStore`, 0 database operations, single-instance only). In contrast, Axum enforced durable, multi-instance-compatible database sessions (`tower_sessions_sqlx_store`). Initial Axum implementations executed 3 database queries per authenticated request, causing connection pool starvation under high concurrency. With Phase 2 compact session caching, Axum reduced database load to a single query per request while preserving full database session durability and instant multi-instance readiness.
+- **Transactional Integrity & Zero Errors**: Both backends maintained **100% request reliability (0 HTTP errors, 0 timeouts)** across all benchmark trials. In closed-loop transactional testing, 30 sequential booking/cancellation cycles executed with **zero capacity leaks** (150/150 seats strictly preserved).
 
 ---
 
@@ -199,7 +199,11 @@ Cold startup was measured across 5 clean independent trials from process spawn u
 
 ---
 
-## 6. Workload Benchmark Results: Express vs Axum (Pre-Fix & Post-Fix)
+## 6. Workload Benchmark Results: Express vs Axum (Early Historical Harness)
+
+> [!NOTE]
+> **Historical Baseline Harness Results (Phase 1 / Early Audit)**
+> The tables in Section 6 and Section 8 represent early historical measurements recorded using the initial benchmark harness (`harness.js`). These runs included `RUST_LOG=info` terminal serialization overhead, unread pipe buffering, and cumulative session accumulation. They are preserved here strictly as historical audit evidence of the pre-optimization baseline. For modern, isolated, multi-trial measurements with isolated telemetry and controlled pipes, refer to the Phase 3 validation results in **Section 11**.
 
 All benchmark runs were executed using `autocannon` under identical experimental parameters:
 - **Concurrencies**: 1, 10, 25, 50 virtual users (VUs)
@@ -584,7 +588,10 @@ Each trial was executed with a fresh process spawn, explicit verification of `DB
 
 ---
 
-## 8. Summary Comparison: Express.js vs Axum (Before Fix vs After Fix)
+## 8. Historical Summary Comparison: Express.js vs Axum (Early Harness Data)
+
+> [!WARNING]
+> **Historical Artifact Notice**: This comparison reflects data collected during the initial Phase 1 audit using the un-isolated harness (`harness.js`). It does not reflect the Phase 2 session identity caching or Phase 3 isolated alternating multi-trial results documented in Section 10 and Section 11.
 
 | Route & Concurrency | Express RPS | Axum (Pre-Fix) RPS | Axum (Post-Fix) RPS | Post-Fix vs Express Delta | Express Working Set | Axum Post-Fix Working Set | Memory Reduction |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -683,7 +690,7 @@ A sequential end-to-end user workflow was executed on future published Event 97 
 
 ---
 
-## 11. Phase 3 Validation: Authorization Correctness, Index Migration & Multi-Trial Statistical Reliability
+## 11. Phase 3 Validation: Authorization Correctness, Index Migration & Multi-Trial Empirical Reliability
 
 Phase 3 was conducted to rigorously validate the optimizations implemented in Phase 2 without introducing further speculative optimizations. This phase audited authorization correctness under dynamic database role changes, deployed repeatable schema migrations, resolved benchmark anomalies on public routes, and executed a 5-round alternating multi-trial benchmark suite.
 
@@ -773,11 +780,14 @@ To prevent run-to-run noise, thermal throttling, or environmental drift from dis
 | **Event Detail** (`/events/1`) | C=25 | 9,707.8 ± 769.3 RPS | **10,541.6 ± 591.2 RPS** | **+8.6%** | 2.0 ms / 3.2 ms | 2.0 ms / 2.5 ms | 38,868 | 42,198 | Unchanged |
 | **Event Detail** (`/events/1`) | C=50 | 9,644.0 ± 541.0 RPS | **10,232.0 ± 961.3 RPS** | **+6.1%** | 4.4 ms / 6.1 ms | **4.2 ms / 5.5 ms** | 38,655 | 40,993 | Unchanged |
 
-#### Investigation of Public Route Findings
+#### Investigation of Public Route Findings (Measured Results vs Hypotheses)
 In un-isolated single-run Phase 2 microbenchmarks, public routes showed minor throughput declines. In this Phase 3 multi-trial alternating investigation:
-1. **Diagnosis of Root Cause**: The earlier baseline and optimized test loops performed `std::env::var("BASELINE_CSRF")` lookups per request inside Axum route handlers. On Windows, `std::env::var` invokes `GetEnvironmentVariableW`, acquiring the process-wide environment lock. Under 8,000–10,000 RPS across 8 worker threads, this lock introduced synthetic thread contention.
-2. **True Controlled Outcome**: Once environment lock lookups and excessive tracing pipe contention were resolved, **public catalogue throughput showed a confirmed +6.9% to +11.8% improvement** on the optimized build (reaching 8,134 RPS at C=10).
-3. **Event Detail Variance**: Event Detail throughput at C=10 showed -1.2% delta (10,557.6 vs 10,431.2 RPS), but this is well within the measured standard deviation (±906.0 RPS). Thus, public route performance is verified to be equivalent or slightly improved, with zero regression.
+1. **Measured Baseline vs Optimized Throughput**: Across 5 alternating rounds ($N=5$ per binary), `/events` achieved **8,134.2 ± 924.2 RPS** on the optimized build vs **7,300.0 ± 321.3 RPS** on baseline at C=10. On `/events/1`, C=10 measured **10,431.2 ± 906.0 RPS** (optimized) vs **10,557.6 ± 256.6 RPS** (baseline).
+2. **Analysis of Run-to-Run Variance**: The -1.2% difference at C=10 on `/events/1` is well within the run-to-run standard deviation (±906.0 RPS), indicating that normal workload variability accounts for this difference rather than a systematic code regression.
+3. **Investigation of Root Cause (Diagnosis & Hypothesis)**: Profiling identified two external factors that depressed earlier runs:
+   - *Environment Variable Contention*: The test loops frequently queried `std::env::var("BASELINE_CSRF")` per request. On Windows, `std::env::var` invokes `GetEnvironmentVariableW`, acquiring the process-wide environment lock and causing cross-thread contention under high concurrency.
+   - *Stdout Pipe Buffering*: Axum trace logging to unread OS pipes caused worker threads to block when the OS buffer filled.
+   Eliminating these measurement artifacts restored high, repeatable throughput across both public read routes.
 
 ---
 
