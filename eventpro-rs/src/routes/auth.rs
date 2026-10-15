@@ -143,6 +143,7 @@ pub async fn login(
     let _ = session.insert("userId", user.id).await;
     let _ = session.insert("role", &user.role).await;
     let _ = session.insert("name", &user.full_name).await;
+    let _ = session.insert("auth_user", &user).await;
 
     tracing::info!(user_id = user.id, role = %user.role, "User successfully logged in");
 
@@ -274,10 +275,22 @@ pub async fn register(
     let _ = rotate_csrf_token(&session).await;
 
     // Populate session with authenticated identity
+    let compact_user = User {
+        id: user_id,
+        full_name: full_name.to_string(),
+        email: email.to_string(),
+        password: String::new(),
+        role: safe_role.to_string(),
+        avatar: None,
+        bio: None,
+        created_at: None,
+        updated_at: None,
+    };
     let _ = session.insert("user_id", user_id).await;
     let _ = session.insert("userId", user_id).await;
     let _ = session.insert("role", safe_role).await;
     let _ = session.insert("name", full_name).await;
+    let _ = session.insert("auth_user", &compact_user).await;
 
     tracing::info!(
         user_id = user_id,
