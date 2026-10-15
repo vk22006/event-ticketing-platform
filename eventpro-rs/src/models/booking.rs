@@ -163,10 +163,14 @@ impl Booking {
                    WHERE b.user_id = ? \
                    ORDER BY b.booked_at DESC";
 
-        sqlx::query_as::<_, UserBooking>(sql)
+        let mut conn = crate::metrics::acquire_conn(pool).await?;
+        let q_start = std::time::Instant::now();
+        let res = sqlx::query_as::<_, UserBooking>(sql)
             .bind(user_id)
-            .fetch_all(pool)
-            .await
+            .fetch_all(&mut *conn)
+            .await;
+        crate::metrics::record_query_duration(q_start.elapsed());
+        res
     }
 
     /// Retrieve detailed booking information by ID
