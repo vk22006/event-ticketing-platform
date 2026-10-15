@@ -1,4 +1,4 @@
-# EventPro: Event Lifecycle and Ticketing Platform
+# EventPro - An End-to-End Event Lifecycle & Ticketing Platform
 
 EventPro is a full-stack event management and ticketing platform designed to manage the entire lifecycle of events—from initial planning and publishing to seat reservation, ticket generation, and post-booking management. The platform provides tailored workflows for three primary user personas: Attendees, Event Organizers, and Platform Administrators.
 
