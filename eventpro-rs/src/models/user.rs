@@ -5,7 +5,7 @@ pub struct User {
     pub id: i32,
     pub full_name: String,
     pub email: String,
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing, default)]
     pub password: String,
     pub role: String,
     pub avatar: Option<String>,
@@ -17,22 +17,30 @@ pub struct User {
 impl User {
     /// Find a user by their unique email address
     pub async fn find_by_email(pool: &MySqlPool, email: &str) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>(
+        let mut conn = crate::metrics::acquire_conn(pool).await?;
+        let q_start = std::time::Instant::now();
+        let res = sqlx::query_as::<_, User>(
             "SELECT id, full_name, email, password, role, avatar, bio, created_at, updated_at FROM users WHERE email = ?"
         )
         .bind(email)
-        .fetch_optional(pool)
-        .await
+        .fetch_optional(&mut *conn)
+        .await;
+        crate::metrics::record_query_duration(q_start.elapsed());
+        res
     }
 
     /// Find a user by their primary key id
     pub async fn find_by_id(pool: &MySqlPool, id: i32) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>(
+        let mut conn = crate::metrics::acquire_conn(pool).await?;
+        let q_start = std::time::Instant::now();
+        let res = sqlx::query_as::<_, User>(
             "SELECT id, full_name, email, password, role, avatar, bio, created_at, updated_at FROM users WHERE id = ?"
         )
         .bind(id)
-        .fetch_optional(pool)
-        .await
+        .fetch_optional(&mut *conn)
+        .await;
+        crate::metrics::record_query_duration(q_start.elapsed());
+        res
     }
 
     /// Insert a new user into the database, returning their generated user ID
