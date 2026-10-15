@@ -17,21 +17,29 @@ impl SeatType {
         pool: &MySqlPool,
         event_id: i32,
     ) -> Result<Vec<SeatType>, sqlx::Error> {
-        sqlx::query_as::<_, SeatType>(
+        let mut conn = crate::metrics::acquire_conn(pool).await?;
+        let q_start = std::time::Instant::now();
+        let res = sqlx::query_as::<_, SeatType>(
             "SELECT id, event_id, type_name, price, total_seats, booked_seats FROM seat_types WHERE event_id = ? ORDER BY price ASC",
         )
         .bind(event_id)
-        .fetch_all(pool)
-        .await
+        .fetch_all(&mut *conn)
+        .await;
+        crate::metrics::record_query_duration(q_start.elapsed());
+        res
     }
 
     /// Retrieve a specific seat tier by ID
     pub async fn find_by_id(pool: &MySqlPool, id: i32) -> Result<Option<SeatType>, sqlx::Error> {
-        sqlx::query_as::<_, SeatType>(
+        let mut conn = crate::metrics::acquire_conn(pool).await?;
+        let q_start = std::time::Instant::now();
+        let res = sqlx::query_as::<_, SeatType>(
             "SELECT id, event_id, type_name, price, total_seats, booked_seats FROM seat_types WHERE id = ?",
         )
         .bind(id)
-        .fetch_optional(pool)
-        .await
+        .fetch_optional(&mut *conn)
+        .await;
+        crate::metrics::record_query_duration(q_start.elapsed());
+        res
     }
 }
