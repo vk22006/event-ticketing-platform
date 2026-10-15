@@ -1,6 +1,7 @@
 pub mod config;
 pub mod csrf;
 pub mod error;
+pub mod metrics;
 pub mod middleware;
 pub mod models;
 pub mod routes;
