@@ -598,7 +598,7 @@ async fn test_e2e_workflow_3_attendee_booking_lifecycle() {
     let resp_my_tickets = app.clone().oneshot(req_my_tickets).await.unwrap();
     assert_eq!(resp_my_tickets.status(), StatusCode::OK);
     let my_tickets_html = String::from_utf8_lossy(
-        &to_bytes(resp_my_tickets.into_body(), 128 * 1024)
+        &to_bytes(resp_my_tickets.into_body(), 1024 * 1024)
             .await
             .unwrap(),
     )
@@ -645,7 +645,7 @@ async fn test_e2e_workflow_3_attendee_booking_lifecycle() {
     let resp_my_bookings = app.clone().oneshot(req_my_bookings).await.unwrap();
     assert_eq!(resp_my_bookings.status(), StatusCode::OK);
     let my_bookings_html = String::from_utf8_lossy(
-        &to_bytes(resp_my_bookings.into_body(), 128 * 1024)
+        &to_bytes(resp_my_bookings.into_body(), 1024 * 1024)
             .await
             .unwrap(),
     )
