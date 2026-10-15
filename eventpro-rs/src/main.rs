@@ -1,5 +1,5 @@
 use dotenvy::dotenv;
-use eventpro::{config::AppConfig, routes::create_router, state::AppState};
+use eventpro::{config::AppConfig, metrics, routes::create_router, state::AppState};
 use sqlx::mysql::MySqlPoolOptions;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -35,8 +35,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Database         : [REDACTED credentials]");
 
     // Connect to MySQL with connection pooling
+    let pool_max: u32 = std::env::var("DB_POOL_MAX")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
+    metrics::set_configured_pool_max(pool_max);
+    tracing::info!("Database pool max: {}", pool_max);
+
     let pool = MySqlPoolOptions::new()
-        .max_connections(10)
+        .max_connections(pool_max)
         .min_connections(1)
         .acquire_timeout(Duration::from_secs(5))
         .connect(&config.database_url)
