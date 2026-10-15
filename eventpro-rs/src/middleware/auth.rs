@@ -25,11 +25,22 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             .get::<Session>()
             .ok_or_else(|| Redirect::to("/auth/login").into_response())?;
 
+        // 1. Fast path: Read compact user identity directly from persistent session
+        if let Ok(Some(cached_user)) = session.get::<User>("auth_user").await {
+            if cached_user.id > 0 && !cached_user.role.is_empty() {
+                return Ok(AuthenticatedUser(cached_user));
+            }
+        }
+
+        // 2. Fallback path for sessions without cached identity: query DB
         let user_id = get_session_user_id(session).await;
 
         match user_id {
             Some(id) => match User::find_by_id(&state.db, id).await {
-                Ok(Some(user)) => Ok(AuthenticatedUser(user)),
+                Ok(Some(user)) => {
+                    let _ = session.insert("auth_user", &user).await;
+                    Ok(AuthenticatedUser(user))
+                }
                 Ok(None) => {
                     // Stale session pointing to deleted user
                     let _ = session.flush().await;
@@ -62,11 +73,22 @@ impl FromRequestParts<AppState> for OptionalUser {
             None => return Ok(OptionalUser(None)),
         };
 
+        // 1. Fast path: Read compact user identity directly from persistent session
+        if let Ok(Some(cached_user)) = session.get::<User>("auth_user").await {
+            if cached_user.id > 0 && !cached_user.role.is_empty() {
+                return Ok(OptionalUser(Some(cached_user)));
+            }
+        }
+
+        // 2. Fallback path for sessions without cached identity: query DB
         let user_id = get_session_user_id(session).await;
 
         if let Some(id) = user_id {
             match User::find_by_id(&state.db, id).await {
-                Ok(Some(user)) => Ok(OptionalUser(Some(user))),
+                Ok(Some(user)) => {
+                    let _ = session.insert("auth_user", &user).await;
+                    Ok(OptionalUser(Some(user)))
+                }
                 Ok(None) => {
                     // Stale session pointing to deleted user
                     let _ = session.flush().await;
