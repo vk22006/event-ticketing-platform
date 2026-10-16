@@ -18,7 +18,7 @@ function getArg(name, defaultValue) {
     return defaultValue;
 }
 
-const target = getArg('target', 'express').toLowerCase();
+const target = getArg('target', 'axum').toLowerCase();
 const baseUrl = getArg('url', target === 'express' ? 'http://127.0.0.1:3000' : 'http://127.0.0.1:3001');
 const targetPid = parseInt(getArg('pid', '0'), 10);
 const concurrencyList = getArg('concurrencies', '1,10,25,50')
@@ -33,6 +33,9 @@ const numLogicalCores = os.cpus().length || 8;
 
 console.log('====================================================');
 console.log(`EventPro Benchmark Harness: ${target.toUpperCase()}`);
+if (target === 'express') {
+    console.log('[Notice: Express backend is permanently retired; target is historical]');
+}
 console.log(`Base URL       : ${baseUrl}`);
 console.log(`Target PID     : ${targetPid || 'Not specified (skipping resource metrics)'}`);
 console.log(`Logical Cores  : ${numLogicalCores}`);
