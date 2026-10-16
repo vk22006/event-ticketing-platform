@@ -26,6 +26,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "autocannon": "^8.0.0"
+    "autocannon": "^8.0.0",
+    "mysql2": "^3.24.6"
   }
 }
