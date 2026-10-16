@@ -2,6 +2,9 @@
 
 A reproducible, empirical performance evaluation comparing the original Node.js/Express.js backend with the migrated Rust/Axum backend for the EventPro event-ticketing platform.
 
+> [!NOTE]
+> **Historical Artifact Notice**: The Express.js backend implementation evaluated in this report has been permanently retired from the repository. The benchmark figures and comparative metrics documented below are preserved historical measurements and cannot be reproduced from current working-tree code, which exclusively maintains the Rust/Axum backend.
+
 ---
 
 ## 1. Executive Summary
