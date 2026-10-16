@@ -30,7 +30,7 @@
       "dashboard": {
         "path": "/dashboard",
         "statusCode": 200,
-        "bytes": 11346,
+        "bytes": 14768,
         "contentType": "text/html; charset=utf-8",
         "title": "Dashboard – EventPro",
         "h1": "Dashboard",
@@ -42,7 +42,7 @@
       "bookings_history": {
         "path": "/bookings/my",
         "statusCode": 200,
-        "bytes": 9611,
+        "bytes": 12171,
         "contentType": "text/html; charset=utf-8",
         "title": "My Bookings – EventPro",
         "h1": "My Bookings 📋",
@@ -54,8 +54,7 @@
     },
     "auth": {
       "statusCode": 302,
-      "cookieName": "connect.sid",
-      "redirectLocation": "/dashboard"
+      "cookieName": "connect.sid"
     }
   },
   "axum": {
@@ -89,7 +88,7 @@
       "dashboard": {
         "path": "/dashboard",
         "statusCode": 200,
-        "bytes": 8071,
+        "bytes": 9907,
         "contentType": "text/html; charset=utf-8",
         "title": "Dashboard – EventPro",
         "h1": "Dashboard",
@@ -101,7 +100,7 @@
       "bookings_history": {
         "path": "/bookings/my",
         "statusCode": 200,
-        "bytes": 8824,
+        "bytes": 10948,
         "contentType": "text/html; charset=utf-8",
         "title": "My Bookings",
         "h1": "My Bookings 📋",
@@ -137,8 +136,7 @@
     },
     "auth": {
       "statusCode": 303,
-      "cookieName": "eventpro_sid",
-      "redirectLocation": "/dashboard"
+      "cookieName": "eventpro_sid"
     }
   }
 }

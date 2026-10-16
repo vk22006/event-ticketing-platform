@@ -1,12 +1,27 @@
 {
   "name": "benchmarks",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "EventPro benchmarking, correctness verification, and performance analysis suite",
+  "main": "run_reconciled_benchmark.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:routes && npm run test:sessions && npm run test:indexes && npm run test:booking",
+    "test:routes": "node validate_routes.js",
+    "test:booking": "node run_booking_invariant_test.js",
+    "test:sessions": "node test_session_writes.js",
+    "test:indexes": "node test_indexes.js",
+    "test:startup": "node measure_startup.js",
+    "audit:env": "node audit_environment.js",
+    "bench:reconciled": "node run_reconciled_benchmark.js",
+    "bench:validation": "node run_phase3_validation.js",
+    "analyze:comparison": "node analyze.js",
+    "analyze:validation": "node analyze_phase3_validation.js"
   },
-  "keywords": [],
+  "keywords": [
+    "benchmark",
+    "axum",
+    "express",
+    "performance"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

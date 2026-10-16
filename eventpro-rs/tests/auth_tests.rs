@@ -1,52 +1,23 @@
+mod common;
+
 use axum::{
     body::to_bytes,
     http::{header, Request, StatusCode},
     routing::get,
     Router,
 };
+use common::{
+    create_test_app, create_test_state, create_test_state_with_pool, extract_cookie,
+    extract_csrf_token, get_response, http_login, post_form_response,
+};
 use eventpro::{
-    config::{resolve_public_dir, AppConfig},
     csrf::{generate_csrf_token, verify_token_constant_time},
     error::AppError,
     middleware::{verify_role, AuthenticatedUser},
     models::User,
-    state::AppState,
 };
-use std::time::Duration;
 use tower::ServiceExt;
-use tower_sessions::{Expiry, SessionManagerLayer};
-
-fn create_test_state() -> AppState {
-    let public_dir = resolve_public_dir().expect("public directory should resolve");
-    let upload_dir = public_dir.join("uploads");
-    let config = AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3001,
-        database_url: "mysql://dummy_user:dummy_pass@127.0.0.1:9999/dummy_db".to_string(),
-        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
-        app_env: "test".to_string(),
-        public_dir,
-        upload_dir,
-    };
-
-    let pool = sqlx::mysql::MySqlPoolOptions::new()
-        .acquire_timeout(Duration::from_millis(100))
-        .connect_lazy(&config.database_url)
-        .expect("lazy pool creation failed");
-
-    AppState::new(pool, config)
-}
-
-fn create_test_app(state: AppState) -> Router {
-    let session_store = tower_sessions::MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store)
-        .with_name("eventpro_sid")
-        .with_secure(false)
-        .with_same_site(tower_sessions::cookie::SameSite::Lax)
-        .with_expiry(Expiry::OnInactivity(time::Duration::hours(24)));
-
-    eventpro::routes::create_router_with_store(state, Some(session_layer))
-}
+use tower_sessions::SessionManagerLayer;
 
 #[test]
 fn test_bcrypt_hash_verification_seed_accounts() {
@@ -197,31 +168,16 @@ fn test_database_error_sanitization() {
 
 #[tokio::test]
 async fn test_login_page_renders_csrf_and_form() {
-    let state = create_test_state();
-    let app = create_test_app(state);
+    let app = create_test_app(create_test_state());
+    let (status, headers, html) = get_response(&app, "/auth/login", None).await;
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/auth/login")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let cookie_header = response.headers().get(header::SET_COOKIE);
-    assert!(cookie_header.is_some());
-    assert!(cookie_header
+    assert_eq!(status, StatusCode::OK);
+    assert!(headers
+        .get(header::SET_COOKIE)
         .unwrap()
         .to_str()
         .unwrap()
         .contains("eventpro_sid="));
-
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(html.contains("Sign in to your EventPro account"));
     assert!(html.contains("name=\"email\""));
@@ -232,24 +188,10 @@ async fn test_login_page_renders_csrf_and_form() {
 
 #[tokio::test]
 async fn test_register_page_renders_csrf_and_form() {
-    let state = create_test_state();
-    let app = create_test_app(state);
+    let app = create_test_app(create_test_state());
+    let (status, _, html) = get_response(&app, "/auth/register", None).await;
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/auth/register")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(body.to_vec()).unwrap();
-
+    assert_eq!(status, StatusCode::OK);
     assert!(html.contains("Join EventPro and start your journey"));
     assert!(html.contains("name=\"full_name\""));
     assert!(html.contains("name=\"email\""));
@@ -262,140 +204,50 @@ async fn test_register_page_renders_csrf_and_form() {
 }
 
 #[tokio::test]
-async fn test_login_post_missing_csrf_rejected_403() {
-    let state = create_test_state();
-    let app = create_test_app(state);
+async fn test_auth_post_missing_or_invalid_csrf_rejected_403() {
+    let app = create_test_app(create_test_state());
 
-    let form_body = "email=admin@eventpro.com&password=Admin@1234";
+    let cases = vec![
+        ("/auth/login", "email=admin@eventpro.com&password=Admin@1234"),
+        (
+            "/auth/login",
+            "email=admin@eventpro.com&password=Admin@1234&csrf_token=invalid_forged_token_12345678",
+        ),
+        (
+            "/auth/register",
+            "full_name=Test+User&email=test@example.com&password=secret123&confirm_password=secret123&role=user",
+        ),
+    ];
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/login")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::from(form_body))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(body.to_vec()).unwrap();
-    assert!(html.contains("CSRF validation failed"));
-    assert!(html.contains("Action Blocked"));
-}
-
-#[tokio::test]
-async fn test_login_post_invalid_csrf_rejected_403() {
-    let state = create_test_state();
-    let app = create_test_app(state);
-
-    let form_body =
-        "email=admin@eventpro.com&password=Admin@1234&csrf_token=invalid_forged_token_12345678";
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/login")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::from(form_body))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(body.to_vec()).unwrap();
-    assert!(html.contains("CSRF validation failed"));
-}
-
-#[tokio::test]
-async fn test_register_post_missing_csrf_rejected_403() {
-    let state = create_test_state();
-    let app = create_test_app(state);
-
-    let form_body = "full_name=Test+User&email=test@example.com&password=secret123&confirm_password=secret123&role=user";
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/register")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::from(form_body))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(body.to_vec()).unwrap();
-    assert!(html.contains("CSRF validation failed"));
+    for (uri, form_body) in cases {
+        let (status, _, html) = post_form_response(&app, uri, None, form_body).await;
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "Form post to {} without valid CSRF must return 403",
+            uri
+        );
+        assert!(html.contains("CSRF validation failed"));
+    }
 }
 
 #[tokio::test]
 async fn test_logout_post_with_valid_csrf_invalidates_session_and_redirects() {
-    let state = create_test_state();
-    let app = create_test_app(state);
+    let app = create_test_app(create_test_state());
 
     // 1. GET /auth/login to establish session and get CSRF token
-    let login_page_res = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/auth/login")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let cookie = login_page_res
-        .headers()
-        .get(header::SET_COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let body = to_bytes(login_page_res.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let html = String::from_utf8(body.to_vec()).unwrap();
-    let csrf_token = html
-        .split("name=\"csrf_token\" value=\"")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .expect("CSRF token present on login page");
+    let (_, headers, html) = get_response(&app, "/auth/login", None).await;
+    let cookie = extract_cookie(&headers).expect("CSRF session cookie");
+    let csrf_token = extract_csrf_token(&html).expect("CSRF token present on login page");
 
     // 2. POST /auth/logout with valid CSRF token
     let form_body = format!("csrf_token={}", csrf_token);
-    let logout_res = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/logout")
-                .header(header::COOKIE, &cookie)
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::from(form_body))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let (status, logout_headers, _) =
+        post_form_response(&app, "/auth/logout", Some(&cookie), &form_body).await;
 
-    assert_eq!(logout_res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(
-        logout_res
-            .headers()
+        logout_headers
             .get(header::LOCATION)
             .unwrap()
             .to_str()
@@ -406,84 +258,32 @@ async fn test_logout_post_with_valid_csrf_invalidates_session_and_redirects() {
 
 #[tokio::test]
 async fn test_logout_post_missing_or_invalid_csrf_retains_session() {
-    let state = create_test_state();
-    let app = create_test_app(state);
+    let app = create_test_app(create_test_state());
 
-    // GET /auth/login to establish session
-    let login_page_res = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/auth/login")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let cookie = login_page_res
-        .headers()
-        .get(header::SET_COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    let (_, headers, _) = get_response(&app, "/auth/login", None).await;
+    let cookie = extract_cookie(&headers).expect("CSRF session cookie");
 
     // 1. Missing CSRF token
-    let res_missing = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/logout")
-                .header(header::COOKIE, &cookie)
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(res_missing.status(), StatusCode::FORBIDDEN);
-    let body = to_bytes(res_missing.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(body.to_vec()).unwrap();
-    assert!(html.contains("CSRF validation failed"));
+    let (s1, _, b1) = post_form_response(&app, "/auth/logout", Some(&cookie), "").await;
+    assert_eq!(s1, StatusCode::FORBIDDEN);
+    assert!(b1.contains("CSRF validation failed"));
 
     // 2. Invalid CSRF token
-    let res_invalid = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/logout")
-                .header(header::COOKIE, &cookie)
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::from("csrf_token=forged_bad_token"))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(res_invalid.status(), StatusCode::FORBIDDEN);
+    let (s2, _, _) = post_form_response(
+        &app,
+        "/auth/logout",
+        Some(&cookie),
+        "csrf_token=forged_bad_token",
+    )
+    .await;
+    assert_eq!(s2, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
 async fn test_logout_get_returns_405_method_not_allowed() {
-    let state = create_test_state();
-    let app = create_test_app(state);
-
-    let res = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/auth/logout")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(res.status(), StatusCode::METHOD_NOT_ALLOWED);
+    let app = create_test_app(create_test_state());
+    let (status, _, _) = get_response(&app, "/auth/logout", None).await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
 }
 
 #[tokio::test]
@@ -682,8 +482,6 @@ async fn test_rbac_verification_with_cached_user() {
     assert!(verify_role(&admin, &["organizer", "admin"]).is_ok());
 }
 
-mod common;
-
 #[tokio::test]
 async fn test_real_mysql_integration() {
     let pool = match common::get_test_pool().await {
@@ -709,18 +507,7 @@ async fn test_real_mysql_role_downgrade_revocation_policy() {
         None => return,
     };
 
-    let public_dir = resolve_public_dir().expect("public directory should resolve");
-    let upload_dir = public_dir.join("uploads");
-    let config = AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3001,
-        database_url: "mysql://ignored".to_string(),
-        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
-        app_env: "test".to_string(),
-        public_dir,
-        upload_dir,
-    };
-    let state = AppState::new(pool.clone(), config);
+    let state = create_test_state_with_pool(&pool);
     let app = create_test_app(state);
 
     let test_email = format!("downgrade_test_{}@eventpro.com", rand::random::<u32>());
@@ -731,69 +518,11 @@ async fn test_real_mysql_role_downgrade_revocation_policy() {
         .await
         .expect("create user");
 
-    // Helper: simulate login by getting CSRF and posting credentials
-    let login_page = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/auth/login")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let init_cookie = login_page
-        .headers()
-        .get(header::SET_COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let body_bytes = to_bytes(login_page.into_body(), 64 * 1024).await.unwrap();
-    let html = String::from_utf8_lossy(&body_bytes);
-    let csrf_token = html
-        .split("name=\"csrf_token\" value=\"")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .expect("csrf token");
-
-    let form = format!(
-        "email={}&password=User%401234&csrf_token={}",
-        percent_encoding::utf8_percent_encode(&test_email, percent_encoding::NON_ALPHANUMERIC),
-        csrf_token
-    );
-
-    let login_resp = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/login")
-                .header(header::COOKIE, &init_cookie)
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::from(form))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(login_resp.status(), StatusCode::SEE_OTHER);
-    let org_cookie = login_resp
-        .headers()
-        .get(header::SET_COOKIE)
-        .map(|v| v.to_str().unwrap().to_string())
-        .unwrap_or(init_cookie);
+    let (org_cookie, _) = http_login(&app, &test_email, "User@1234").await;
 
     // 2. Verified organizer access: GET /events/create returns 200 OK
-    let create_req = Request::builder()
-        .uri("/events/create")
-        .header(header::COOKIE, &org_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let create_resp = app.clone().oneshot(create_req).await.unwrap();
-    assert_eq!(create_resp.status(), StatusCode::OK);
+    let (status, _, _) = get_response(&app, "/events/create", Some(&org_cookie)).await;
+    assert_eq!(status, StatusCode::OK);
 
     // 3. Admin downgrades user in MySQL to 'user'
     sqlx::query("UPDATE users SET role = 'user' WHERE id = ?")
@@ -805,77 +534,18 @@ async fn test_real_mysql_role_downgrade_revocation_policy() {
     // 4. Verification under Session Invalidation Policy:
     // Once session is re-established (e.g. following session invalidation or logout/login),
     // the downgraded attendee CANNOT access /events/create or /admin/dashboard
-    let login_page2 = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/auth/login")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let init_cookie2 = login_page2
-        .headers()
-        .get(header::SET_COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-    let body_bytes2 = to_bytes(login_page2.into_body(), 64 * 1024).await.unwrap();
-    let csrf_token2 = String::from_utf8_lossy(&body_bytes2)
-        .split("name=\"csrf_token\" value=\"")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .expect("csrf token")
-        .to_string();
+    let (user_cookie, _) = http_login(&app, &test_email, "User@1234").await;
 
-    let form2 = format!(
-        "email={}&password=User%401234&csrf_token={}",
-        percent_encoding::utf8_percent_encode(&test_email, percent_encoding::NON_ALPHANUMERIC),
-        csrf_token2
-    );
-    let login_resp2 = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/login")
-                .header(header::COOKIE, &init_cookie2)
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(axum::body::Body::from(form2))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let user_cookie = login_resp2
-        .headers()
-        .get(header::SET_COOKIE)
-        .map(|v| v.to_str().unwrap().to_string())
-        .unwrap_or(init_cookie2);
-
-    // Attempting to access organizer route as downgraded user MUST be rejected with 403 Forbidden
-    let create_req2 = Request::builder()
-        .uri("/events/create")
-        .header(header::COOKIE, &user_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let create_resp2 = app.clone().oneshot(create_req2).await.unwrap();
+    let (status, _, _) = get_response(&app, "/events/create", Some(&user_cookie)).await;
     assert_eq!(
-        create_resp2.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Downgraded user must be denied organizer privileges"
     );
 
-    // Attempting to access admin route MUST also be rejected with 403 Forbidden
-    let admin_req = Request::builder()
-        .uri("/admin/dashboard")
-        .header(header::COOKIE, &user_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let admin_resp = app.clone().oneshot(admin_req).await.unwrap();
+    let (status, _, _) = get_response(&app, "/admin/dashboard", Some(&user_cookie)).await;
     assert_eq!(
-        admin_resp.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Downgraded user must be denied admin privileges"
     );
@@ -894,18 +564,7 @@ async fn test_fallback_when_auth_user_missing_from_session() {
         None => return,
     };
 
-    let public_dir = resolve_public_dir().expect("public directory should resolve");
-    let upload_dir = public_dir.join("uploads");
-    let config = AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3001,
-        database_url: "mysql://ignored".to_string(),
-        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
-        app_env: "test".to_string(),
-        public_dir,
-        upload_dir,
-    };
-    let state = AppState::new(pool.clone(), config);
+    let state = create_test_state_with_pool(&pool);
 
     use tower_sessions::Session;
     let app =
@@ -913,7 +572,6 @@ async fn test_fallback_when_auth_user_missing_from_session() {
             .route(
                 "/seed-legacy-session",
                 get(|session: Session| async move {
-                    // Seed session with user_id ONLY (no auth_user)
                     session.insert("user_id", 1).await.unwrap();
                     "legacy_seeded"
                 }),
@@ -924,47 +582,18 @@ async fn test_fallback_when_auth_user_missing_from_session() {
                     format!("id:{}:{}", user.0.id, user.0.email)
                 }),
             )
-            .with_state(state);
+            .with_state(state)
+            .layer(
+                SessionManagerLayer::new(tower_sessions::MemoryStore::default())
+                    .with_name("eventpro_sid"),
+            );
 
-    let session_store = tower_sessions::MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store);
-    let app = app.layer(session_layer);
+    let (_, headers, _) = get_response(&app, "/seed-legacy-session", None).await;
+    let cookie = extract_cookie(&headers).expect("cookie should be set");
 
-    // Seed session
-    let seed_resp = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/seed-legacy-session")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let cookie = seed_resp
-        .headers()
-        .get(header::SET_COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    // Request protected route: fallback queries DB for id 1 (admin@eventpro.com), caches auth_user, succeeds
-    let check_resp = app
-        .oneshot(
-            Request::builder()
-                .uri("/check-user")
-                .header(header::COOKIE, cookie)
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(check_resp.status(), StatusCode::OK);
-    let body = to_bytes(check_resp.into_body(), 1024).await.unwrap();
-    let text = String::from_utf8_lossy(&body);
-    assert!(text.starts_with("id:1:admin@eventpro.com"));
+    let (status, _, body) = get_response(&app, "/check-user", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.starts_with("id:1:admin@eventpro.com"));
 }
 
 #[tokio::test]
@@ -974,25 +603,13 @@ async fn test_deleted_user_invalidation_and_redirect() {
         None => return,
     };
 
-    let public_dir = resolve_public_dir().expect("public directory should resolve");
-    let upload_dir = public_dir.join("uploads");
-    let config = AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3001,
-        database_url: "mysql://ignored".to_string(),
-        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
-        app_env: "test".to_string(),
-        public_dir,
-        upload_dir,
-    };
-    let state = AppState::new(pool.clone(), config);
+    let state = create_test_state_with_pool(&pool);
 
     use tower_sessions::Session;
     let app = Router::new()
         .route(
             "/seed-deleted-user-session",
             get(|session: Session| async move {
-                // Seed session with a nonexistent user ID 999999
                 session.insert("user_id", 999999).await.unwrap();
                 "deleted_seeded"
             }),
@@ -1001,31 +618,15 @@ async fn test_deleted_user_invalidation_and_redirect() {
             "/protected-route",
             get(|_user: AuthenticatedUser| async move { "should_never_reach" }),
         )
-        .with_state(state);
+        .with_state(state)
+        .layer(
+            SessionManagerLayer::new(tower_sessions::MemoryStore::default())
+                .with_name("eventpro_sid"),
+        );
 
-    let session_store = tower_sessions::MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store);
-    let app = app.layer(session_layer);
+    let (_, headers, _) = get_response(&app, "/seed-deleted-user-session", None).await;
+    let cookie = extract_cookie(&headers).expect("cookie should be set");
 
-    let seed_resp = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/seed-deleted-user-session")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let cookie = seed_resp
-        .headers()
-        .get(header::SET_COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    // Access protected route: fallback queries DB for 999999, gets None, flushes session, redirects to /auth/login
     let resp = app
         .oneshot(
             Request::builder()

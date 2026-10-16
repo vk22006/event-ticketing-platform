@@ -1,7 +1,9 @@
-use axum::{
-    body::to_bytes,
-    http::{header, Request, StatusCode},
-    Router,
+mod common;
+
+use axum::http::StatusCode;
+use common::{
+    create_test_app, create_test_state, get_response, http_login, post_form_response, sample_event,
+    sample_user, urlencode,
 };
 use eventpro::{
     config::{resolve_public_dir, AppConfig},
@@ -12,92 +14,7 @@ use eventpro::{
     routes::events::can_manage,
     state::AppState,
 };
-
-fn urlencode(s: &str) -> String {
-    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
-}
 use rust_decimal::Decimal;
-use std::time::Duration;
-use tower::ServiceExt;
-use tower_sessions::{Expiry, SessionManagerLayer};
-
-fn create_test_state() -> AppState {
-    let public_dir = resolve_public_dir().expect("public directory should resolve");
-    let upload_dir = public_dir.join("uploads");
-    let config = AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3001,
-        database_url: "mysql://dummy_user:dummy_pass@127.0.0.1:9999/dummy_db".to_string(),
-        session_secret: "test_secret_must_be_at_least_16_chars".to_string(),
-        app_env: "test".to_string(),
-        public_dir,
-        upload_dir,
-    };
-
-    let pool = sqlx::mysql::MySqlPoolOptions::new()
-        .acquire_timeout(Duration::from_millis(100))
-        .connect_lazy(&config.database_url)
-        .expect("lazy pool creation failed");
-
-    AppState::new(pool, config)
-}
-
-fn create_test_app(state: AppState) -> Router {
-    let session_store = tower_sessions::MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store)
-        .with_name("eventpro_sid")
-        .with_secure(false)
-        .with_same_site(tower_sessions::cookie::SameSite::Lax)
-        .with_expiry(Expiry::OnInactivity(time::Duration::hours(24)));
-
-    eventpro::routes::create_router_with_store(state, Some(session_layer))
-}
-
-fn sample_user(id: i32, role: &str) -> User {
-    User {
-        id,
-        full_name: format!("User {}", id),
-        email: format!("user{}@example.com", id),
-        password: "hashed_password".to_string(),
-        role: role.to_string(),
-        avatar: None,
-        bio: None,
-        created_at: None,
-        updated_at: None,
-    }
-}
-
-fn sample_event(id: i32, status: &str, organizer_id: i32) -> Event {
-    Event {
-        id,
-        organizer_id,
-        category_id: Some(1),
-        title: "Summit 2026".to_string(),
-        description: Some("Tech conference".to_string()),
-        venue: Some("Auditorium".to_string()),
-        city: Some("Hyderabad".to_string()),
-        event_date: chrono::NaiveDateTime::parse_from_str(
-            "2026-11-15 09:30:00",
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .unwrap(),
-        registration_deadline: Some(
-            chrono::NaiveDateTime::parse_from_str("2026-11-10 23:59:00", "%Y-%m-%d %H:%M:%S")
-                .unwrap(),
-        ),
-        total_seats: 250,
-        available_seats: 150,
-        ticket_price: Decimal::new(49900, 2),
-        banner_image: Some("/uploads/summit.jpg".to_string()),
-        status: status.to_string(),
-        created_at: None,
-        updated_at: None,
-        organizer_name: "Organizer One".to_string(),
-        organizer_email: Some("org1@example.com".to_string()),
-        category_name: Some("Technology".to_string()),
-        category_icon: Some("💻".to_string()),
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Authorization and Ownership Rule Tests
@@ -143,8 +60,7 @@ fn test_ownership_and_admin_management_policy() {
 
 #[tokio::test]
 async fn test_unauthenticated_dashboard_redirects_to_login() {
-    let state = create_test_state();
-    let app = create_test_app(state);
+    let app = create_test_app(create_test_state());
 
     let endpoints = vec![
         ("GET", "/dashboard"),
@@ -158,25 +74,21 @@ async fn test_unauthenticated_dashboard_redirects_to_login() {
     ];
 
     for (method, uri) in endpoints {
-        let req = Request::builder()
-            .method(method)
-            .uri(uri)
-            .body(axum::body::Body::empty())
-            .unwrap();
+        let (status, headers, _) = if method == "GET" {
+            get_response(&app, uri, None).await
+        } else {
+            post_form_response(&app, uri, None, "").await
+        };
 
-        let resp = app.clone().oneshot(req).await.unwrap();
-
-        // Must reject unauthenticated request and redirect to /auth/login
         assert_eq!(
-            resp.status(),
+            status,
             StatusCode::SEE_OTHER,
             "Endpoint {} {} must redirect unauthenticated requests",
             method,
             uri
         );
-        let location = resp
-            .headers()
-            .get(header::LOCATION)
+        let location = headers
+            .get(axum::http::header::LOCATION)
             .expect("Location header must exist")
             .to_str()
             .unwrap();
@@ -197,7 +109,8 @@ async fn test_organizer_dashboard_home_template_rendering() {
         .expect("dashboard/home.html must be registered");
 
     let organizer = sample_user(2, "organizer");
-    let event = sample_event(101, "published", 2);
+    let mut event = sample_event(101, "published", 2);
+    event.title = "Summit 2026".to_string();
 
     let rendered = template
         .render(minijinja::context! {
@@ -350,7 +263,8 @@ async fn test_create_and_edit_event_templates_render_csrf_and_fields() {
         .get_template("dashboard/edit-event.html")
         .expect("edit-event.html must exist");
 
-    let event = sample_event(42, "draft", 2);
+    let mut event = sample_event(42, "draft", 2);
+    event.title = "Summit 2026".to_string();
 
     let edit_html = edit_tmpl
         .render(minijinja::context! {
@@ -372,8 +286,6 @@ async fn test_create_and_edit_event_templates_render_csrf_and_fields() {
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. Live MySQL End-to-End Management & Security Lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
-
-mod common;
 
 #[tokio::test]
 async fn test_real_mysql_management_lifecycle_and_security() {
@@ -584,86 +496,11 @@ async fn test_real_mysql_http_management_security() {
     let app_state = AppState::new(pool.clone(), config);
     let app = create_test_app(app_state);
 
-    fn extract_cookie(headers: &axum::http::HeaderMap) -> Option<String> {
-        headers.get_all(header::SET_COOKIE).iter().find_map(|v| {
-            let s = v.to_str().ok()?;
-            if s.starts_with("eventpro_sid=") {
-                Some(s.split(';').next().unwrap().to_string())
-            } else {
-                None
-            }
-        })
-    }
-
-    fn extract_csrf_token(html: &str) -> Option<String> {
-        let marker = "name=\"csrf_token\" value=\"";
-        let start = html.find(marker)? + marker.len();
-        let end = html[start..].find('"')? + start;
-        Some(html[start..end].to_string())
-    }
-
-    async fn http_login(app: &Router, email: &str, password: &str) -> (String, String) {
-        // Step 1: GET /auth/login to obtain session cookie & CSRF token
-        let login_page_req = Request::builder()
-            .uri("/auth/login")
-            .body(axum::body::Body::empty())
-            .unwrap();
-        let login_page_resp = app.clone().oneshot(login_page_req).await.unwrap();
-        let cookie_1 =
-            extract_cookie(login_page_resp.headers()).expect("Must receive session cookie");
-        let body = to_bytes(login_page_resp.into_body(), 64 * 1024)
-            .await
-            .unwrap();
-        let csrf_1 =
-            extract_csrf_token(&String::from_utf8_lossy(&body)).expect("Must extract CSRF token");
-
-        // Step 2: POST /auth/login with credentials and CSRF
-        let form_body = format!(
-            "email={}&password={}&csrf_token={}",
-            urlencode(email),
-            urlencode(password),
-            urlencode(&csrf_1)
-        );
-        let login_req = Request::builder()
-            .method("POST")
-            .uri("/auth/login")
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .header(header::COOKIE, &cookie_1)
-            .body(axum::body::Body::from(form_body))
-            .unwrap();
-
-        let login_resp = app.clone().oneshot(login_req).await.unwrap();
-        assert_eq!(
-            login_resp.status(),
-            StatusCode::SEE_OTHER,
-            "Login should redirect to /dashboard"
-        );
-        let session_cookie = extract_cookie(login_resp.headers()).unwrap_or(cookie_1);
-
-        // Fetch dashboard to get a fresh CSRF token for subsequent mutations
-        let dash_req = Request::builder()
-            .uri("/dashboard")
-            .header(header::COOKIE, &session_cookie)
-            .body(axum::body::Body::empty())
-            .unwrap();
-        let dash_resp = app.clone().oneshot(dash_req).await.unwrap();
-        assert_eq!(dash_resp.status(), StatusCode::OK);
-        let dash_body = to_bytes(dash_resp.into_body(), 128 * 1024).await.unwrap();
-        let dash_csrf = extract_csrf_token(&String::from_utf8_lossy(&dash_body)).unwrap_or(csrf_1);
-
-        (session_cookie, dash_csrf)
-    }
-
     // A. Attendee access check: Attendee attempting to access /events/create -> 403 Forbidden
     let (attendee_cookie, _) = http_login(&app, "charlie@mail.com", "User@1234").await;
-    let create_attendee_req = Request::builder()
-        .uri("/events/create")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let create_attendee_resp = app.clone().oneshot(create_attendee_req).await.unwrap();
+    let (status, _, _) = get_response(&app, "/events/create", Some(&attendee_cookie)).await;
     assert_eq!(
-        create_attendee_resp.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Attendee must be forbidden from accessing /events/create"
     );
@@ -672,76 +509,47 @@ async fn test_real_mysql_http_management_security() {
     let (org1_cookie, org1_csrf) = http_login(&app, "alice@events.com", "Organizer@1").await;
 
     // Organizer accessing /admin/dashboard -> 403 Forbidden
-    let admin_dash_req = Request::builder()
-        .uri("/admin/dashboard")
-        .header(header::COOKIE, &org1_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let admin_dash_resp = app.clone().oneshot(admin_dash_req).await.unwrap();
+    let (status, _, _) = get_response(&app, "/admin/dashboard", Some(&org1_cookie)).await;
     assert_eq!(
-        admin_dash_resp.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Organizer must be forbidden from accessing /admin/dashboard"
     );
 
     // Organizer accessing /events/create -> 200 OK
-    let create_page_req = Request::builder()
-        .uri("/events/create")
-        .header(header::COOKIE, &org1_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let create_page_resp = app.clone().oneshot(create_page_req).await.unwrap();
-    assert_eq!(create_page_resp.status(), StatusCode::OK);
+    let (status, _, _) = get_response(&app, "/events/create", Some(&org1_cookie)).await;
+    assert_eq!(status, StatusCode::OK);
 
     // C. Validation tests on POST /events/create
     // 1. Missing CSRF token -> 403 Forbidden
-    let no_csrf_form = "title=Test+Event&total_seats=100&event_date=2026-11-20T18:00";
-    let no_csrf_req = Request::builder()
-        .method("POST")
-        .uri("/events/create")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org1_cookie)
-        .body(axum::body::Body::from(no_csrf_form))
-        .unwrap();
-    let no_csrf_resp = app.clone().oneshot(no_csrf_req).await.unwrap();
-    assert_eq!(no_csrf_resp.status(), StatusCode::FORBIDDEN);
+    let (status, _, _) = post_form_response(
+        &app,
+        "/events/create",
+        Some(&org1_cookie),
+        "title=Test+Event&total_seats=100&event_date=2026-11-20T18:00",
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 
     // 2. Invalid category_id -> 400 Bad Request
     let bad_cat_form = format!(
         "title=Test+Event&total_seats=100&event_date=2026-11-20T18:00&category_id=99999&csrf_token={}",
         urlencode(&org1_csrf)
     );
-    let bad_cat_req = Request::builder()
-        .method("POST")
-        .uri("/events/create")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org1_cookie)
-        .body(axum::body::Body::from(bad_cat_form))
-        .unwrap();
-    let bad_cat_resp = app.clone().oneshot(bad_cat_req).await.unwrap();
-    assert_eq!(bad_cat_resp.status(), StatusCode::BAD_REQUEST);
-    let bad_cat_body = to_bytes(bad_cat_resp.into_body(), 64 * 1024).await.unwrap();
-    assert!(String::from_utf8_lossy(&bad_cat_body).contains("Selected category does not exist."));
+    let (status, _, body) =
+        post_form_response(&app, "/events/create", Some(&org1_cookie), &bad_cat_form).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.contains("Selected category does not exist."));
 
     // 3. Registration deadline after event date -> 400 Bad Request
     let bad_date_form = format!(
         "title=Test+Event&total_seats=100&event_date=2026-11-20T18:00&registration_deadline=2026-11-25T18:00&csrf_token={}",
         urlencode(&org1_csrf)
     );
-    let bad_date_req = Request::builder()
-        .method("POST")
-        .uri("/events/create")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org1_cookie)
-        .body(axum::body::Body::from(bad_date_form))
-        .unwrap();
-    let bad_date_resp = app.clone().oneshot(bad_date_req).await.unwrap();
-    assert_eq!(bad_date_resp.status(), StatusCode::BAD_REQUEST);
-    let bad_date_body = to_bytes(bad_date_resp.into_body(), 64 * 1024)
-        .await
-        .unwrap();
-    assert!(String::from_utf8_lossy(&bad_date_body)
-        .contains("Registration deadline cannot be after the event date."));
+    let (status, _, body) =
+        post_form_response(&app, "/events/create", Some(&org1_cookie), &bad_date_form).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.contains("Registration deadline cannot be after the event date."));
 
     // 4. Successful event creation with FORGED organizer_id in form
     // Attacker submits organizer_id=999 to try and attribute event to someone else
@@ -749,16 +557,10 @@ async fn test_real_mysql_http_management_security() {
         "title=Forged+ID+Test+Event&total_seats=75&ticket_price=199.00&event_date=2026-11-30T10:00&organizer_id=999&csrf_token={}",
         urlencode(&org1_csrf)
     );
-    let valid_req = Request::builder()
-        .method("POST")
-        .uri("/events/create")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org1_cookie)
-        .body(axum::body::Body::from(valid_form))
-        .unwrap();
-    let valid_resp = app.clone().oneshot(valid_req).await.unwrap();
+    let (status, _, _) =
+        post_form_response(&app, "/events/create", Some(&org1_cookie), &valid_form).await;
     assert_eq!(
-        valid_resp.status(),
+        status,
         StatusCode::SEE_OTHER,
         "Successful creation redirects to /dashboard"
     );
@@ -809,14 +611,14 @@ async fn test_real_mysql_http_management_security() {
     let (org2_cookie, org2_csrf) = http_login(&app, &sec_org_email, "SecOrg2@Password123").await;
 
     // 1. Organizer 2 accessing GET /events/:id/edit for Organizer 1's event -> 403 Forbidden!
-    let edit_forbidden_req = Request::builder()
-        .uri(format!("/events/{}/edit", event_id))
-        .header(header::COOKIE, &org2_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let edit_forbidden_resp = app.clone().oneshot(edit_forbidden_req).await.unwrap();
+    let (status, _, _) = get_response(
+        &app,
+        &format!("/events/{}/edit", event_id),
+        Some(&org2_cookie),
+    )
+    .await;
     assert_eq!(
-        edit_forbidden_resp.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Organizer 2 must be forbidden from editing Organizer 1's event"
     );
@@ -826,48 +628,45 @@ async fn test_real_mysql_http_management_security() {
         "title=Hacked+Event&total_seats=100&event_date=2026-11-30T10:00&csrf_token={}",
         urlencode(&org2_csrf)
     );
-    let update_forbidden_req = Request::builder()
-        .method("POST")
-        .uri(format!("/events/{}/edit", event_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org2_cookie)
-        .body(axum::body::Body::from(update_forbidden_form))
-        .unwrap();
-    let update_forbidden_resp = app.clone().oneshot(update_forbidden_req).await.unwrap();
+    let (status, _, _) = post_form_response(
+        &app,
+        &format!("/events/{}/edit", event_id),
+        Some(&org2_cookie),
+        &update_forbidden_form,
+    )
+    .await;
     assert_eq!(
-        update_forbidden_resp.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Organizer 2 must be forbidden from updating Organizer 1's event"
     );
 
     // 3. Organizer 2 submitting POST /events/:id/toggle-status -> 403 Forbidden!
     let toggle_forbidden_form = format!("csrf_token={}", urlencode(&org2_csrf));
-    let toggle_forbidden_req = Request::builder()
-        .method("POST")
-        .uri(format!("/events/{}/toggle-status", event_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org2_cookie)
-        .body(axum::body::Body::from(toggle_forbidden_form))
-        .unwrap();
-    let toggle_forbidden_resp = app.clone().oneshot(toggle_forbidden_req).await.unwrap();
+    let (status, _, _) = post_form_response(
+        &app,
+        &format!("/events/{}/toggle-status", event_id),
+        Some(&org2_cookie),
+        &toggle_forbidden_form,
+    )
+    .await;
     assert_eq!(
-        toggle_forbidden_resp.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Organizer 2 must be forbidden from toggling Organizer 1's event status"
     );
 
     // 4. Organizer 2 submitting POST /events/:id/delete -> 403 Forbidden!
     let delete_forbidden_form = format!("csrf_token={}", urlencode(&org2_csrf));
-    let delete_forbidden_req = Request::builder()
-        .method("POST")
-        .uri(format!("/events/{}/delete", event_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org2_cookie)
-        .body(axum::body::Body::from(delete_forbidden_form))
-        .unwrap();
-    let delete_forbidden_resp = app.clone().oneshot(delete_forbidden_req).await.unwrap();
+    let (status, _, _) = post_form_response(
+        &app,
+        &format!("/events/{}/delete", event_id),
+        Some(&org2_cookie),
+        &delete_forbidden_form,
+    )
+    .await;
     assert_eq!(
-        delete_forbidden_resp.status(),
+        status,
         StatusCode::FORBIDDEN,
         "Organizer 2 must be forbidden from deleting Organizer 1's event"
     );
@@ -876,38 +675,32 @@ async fn test_real_mysql_http_management_security() {
     let (admin_cookie, admin_csrf) = http_login(&app, "admin@eventpro.com", "Admin@1234").await;
 
     // Admin accessing /admin/dashboard -> 200 OK
-    let admin_dash_ok_req = Request::builder()
-        .uri("/admin/dashboard")
-        .header(header::COOKIE, &admin_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let admin_dash_ok_resp = app.clone().oneshot(admin_dash_ok_req).await.unwrap();
-    assert_eq!(admin_dash_ok_resp.status(), StatusCode::OK);
+    let (status, _, _) = get_response(&app, "/admin/dashboard", Some(&admin_cookie)).await;
+    assert_eq!(status, StatusCode::OK);
 
     // Admin accessing GET /events/:id/edit for Organizer 1's event -> 200 OK
-    let admin_edit_req = Request::builder()
-        .uri(format!("/events/{}/edit", event_id))
-        .header(header::COOKIE, &admin_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let admin_edit_resp = app.clone().oneshot(admin_edit_req).await.unwrap();
+    let (status, _, _) = get_response(
+        &app,
+        &format!("/events/{}/edit", event_id),
+        Some(&admin_cookie),
+    )
+    .await;
     assert_eq!(
-        admin_edit_resp.status(),
+        status,
         StatusCode::OK,
         "Admin must have access to edit any event"
     );
 
     // Admin toggling status via POST /events/:id/toggle-status -> 303 Redirect to /dashboard
     let admin_toggle_form = format!("csrf_token={}", urlencode(&admin_csrf));
-    let admin_toggle_req = Request::builder()
-        .method("POST")
-        .uri(format!("/events/{}/toggle-status", event_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &admin_cookie)
-        .body(axum::body::Body::from(admin_toggle_form))
-        .unwrap();
-    let admin_toggle_resp = app.clone().oneshot(admin_toggle_req).await.unwrap();
-    assert_eq!(admin_toggle_resp.status(), StatusCode::SEE_OTHER);
+    let (status, _, _) = post_form_response(
+        &app,
+        &format!("/events/{}/toggle-status", event_id),
+        Some(&admin_cookie),
+        &admin_toggle_form,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
 
     // Verify status was changed in DB to 'published'
     let toggled_db_event = Event::find_by_id(&pool, event_id).await.unwrap().unwrap();
@@ -915,15 +708,14 @@ async fn test_real_mysql_http_management_security() {
 
     // F. Clean up: Organizer 1 deletes their test event
     let delete_form = format!("csrf_token={}", urlencode(&org1_csrf));
-    let delete_req = Request::builder()
-        .method("POST")
-        .uri(format!("/events/{}/delete", event_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &org1_cookie)
-        .body(axum::body::Body::from(delete_form))
-        .unwrap();
-    let delete_resp = app.clone().oneshot(delete_req).await.unwrap();
-    assert_eq!(delete_resp.status(), StatusCode::SEE_OTHER);
+    let (status, _, _) = post_form_response(
+        &app,
+        &format!("/events/{}/delete", event_id),
+        Some(&org1_cookie),
+        &delete_form,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
 
     let deleted_check = Event::find_by_id(&pool, event_id).await.unwrap();
     assert!(deleted_check.is_none());

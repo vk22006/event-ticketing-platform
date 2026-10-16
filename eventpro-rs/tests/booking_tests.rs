@@ -1,108 +1,18 @@
-use axum::{
-    body::to_bytes,
-    http::{header, Request, StatusCode},
-    Router,
-};
 mod common;
-use eventpro::{
-    config::{resolve_public_dir, AppConfig},
-    models::{
-        booking::{Booking, BookingDetail, BookingError, UserBooking},
-        event::Event,
-        seat_type::SeatType,
-        ticket::{Ticket, TicketDetail, UserTicket},
-        User,
-    },
-    state::AppState,
+
+use axum::http::{header, StatusCode};
+use common::{
+    create_test_app, create_test_state, create_test_state_with_pool, extract_csrf_token,
+    get_response, http_login, post_form_response, sample_event, sample_user, urlencode,
+};
+use eventpro::models::{
+    booking::{Booking, BookingDetail, BookingError, UserBooking},
+    seat_type::SeatType,
+    ticket::{Ticket, TicketDetail, UserTicket},
+    User,
 };
 use rust_decimal::Decimal;
 use std::collections::HashSet;
-use std::time::Duration;
-use tower::ServiceExt;
-use tower_sessions::{Expiry, SessionManagerLayer};
-
-fn urlencode(s: &str) -> String {
-    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
-}
-
-fn create_test_state() -> AppState {
-    let public_dir = resolve_public_dir().expect("public directory should resolve");
-    let upload_dir = public_dir.join("uploads");
-    let config = AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3001,
-        database_url: "mysql://dummy_user:dummy_pass@127.0.0.1:9999/dummy_db".to_string(),
-        session_secret: "phase5_test_session_secret_123456789".to_string(),
-        app_env: "test".to_string(),
-        public_dir,
-        upload_dir,
-    };
-
-    let pool = sqlx::mysql::MySqlPoolOptions::new()
-        .acquire_timeout(Duration::from_millis(100))
-        .connect_lazy(&config.database_url)
-        .expect("lazy pool creation failed");
-
-    AppState::new(pool, config)
-}
-
-fn create_test_app(state: AppState) -> Router {
-    let session_store = tower_sessions::MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store)
-        .with_name("eventpro_sid")
-        .with_secure(false)
-        .with_same_site(tower_sessions::cookie::SameSite::Lax)
-        .with_expiry(Expiry::OnInactivity(time::Duration::hours(24)));
-
-    eventpro::routes::create_router_with_store(state, Some(session_layer))
-}
-
-fn sample_user(id: i32, role: &str) -> User {
-    User {
-        id,
-        full_name: format!("User {}", id),
-        email: format!("user{}@example.com", id),
-        password: "hashed_password".to_string(),
-        role: role.to_string(),
-        avatar: None,
-        bio: None,
-        created_at: None,
-        updated_at: None,
-    }
-}
-
-fn sample_event(id: i32, status: &str, available_seats: i32) -> Event {
-    Event {
-        id,
-        organizer_id: 1,
-        category_id: Some(1),
-        title: "Phase 5 Test Event".to_string(),
-        description: Some("Comprehensive booking tests".to_string()),
-        venue: Some("Auditorium Hall".to_string()),
-        city: Some("Bengaluru".to_string()),
-        event_date: chrono::NaiveDate::from_ymd_opt(2026, 12, 1)
-            .unwrap()
-            .and_hms_opt(18, 0, 0)
-            .unwrap(),
-        registration_deadline: Some(
-            chrono::NaiveDate::from_ymd_opt(2026, 11, 30)
-                .unwrap()
-                .and_hms_opt(23, 59, 59)
-                .unwrap(),
-        ),
-        total_seats: 100,
-        available_seats,
-        ticket_price: Decimal::new(29900, 2),
-        banner_image: None,
-        status: status.to_string(),
-        created_at: None,
-        updated_at: None,
-        organizer_name: "Event Organizer".to_string(),
-        organizer_email: Some("org@example.com".to_string()),
-        category_name: Some("Technology".to_string()),
-        category_icon: Some("💻".to_string()),
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Template Rendering & Ticket Code Unit Tests
@@ -188,7 +98,7 @@ async fn test_booking_select_template_rendering() {
         })
         .expect("Select template should render cleanly");
 
-    assert!(rendered.contains("Phase 5 Test Event"));
+    assert!(rendered.contains(&event.title));
     assert!(rendered.contains("Silver Tier"));
     assert!(rendered.contains("Gold VIP"));
     assert!(rendered.contains("20 left")); // 50 - 30
@@ -448,65 +358,31 @@ async fn test_unauthenticated_booking_access_rejected() {
     let state = create_test_state();
     let app = create_test_app(state);
 
-    // GET /bookings/book/1 without session -> 303 Redirect to login
-    let book_req = Request::builder()
-        .uri("/bookings/book/1")
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let book_resp = app.clone().oneshot(book_req).await.unwrap();
-    assert_eq!(book_resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(
-        book_resp
-            .headers()
-            .get(header::LOCATION)
-            .unwrap()
-            .to_str()
-            .unwrap(),
-        "/auth/login"
-    );
+    for uri in [
+        "/bookings/book/1",
+        "/bookings/payment?eventId=1",
+        "/bookings/my",
+        "/tickets/my",
+    ] {
+        let (status, headers, _) = get_response(&app, uri, None).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers.get(header::LOCATION).unwrap().to_str().unwrap(),
+            "/auth/login"
+        );
+    }
 
-    // GET /bookings/payment without session -> 303 Redirect to login
-    let pay_req = Request::builder()
-        .uri("/bookings/payment?eventId=1")
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let pay_resp = app.clone().oneshot(pay_req).await.unwrap();
-    assert_eq!(pay_resp.status(), StatusCode::SEE_OTHER);
-
-    // POST /bookings/confirm without session -> 303 Redirect to login
-    let conf_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/confirm")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(axum::body::Body::from("event_id=1&quantity=1"))
-        .unwrap();
-    let conf_resp = app.clone().oneshot(conf_req).await.unwrap();
-    assert_eq!(conf_resp.status(), StatusCode::SEE_OTHER);
-
-    // GET /bookings/my without session -> 303 Redirect to login
-    let my_req = Request::builder()
-        .uri("/bookings/my")
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let my_resp = app.clone().oneshot(my_req).await.unwrap();
-    assert_eq!(my_resp.status(), StatusCode::SEE_OTHER);
-
-    // POST /bookings/1/cancel without session -> 303 Redirect to login
-    let cancel_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/1/cancel")
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let cancel_resp = app.clone().oneshot(cancel_req).await.unwrap();
-    assert_eq!(cancel_resp.status(), StatusCode::SEE_OTHER);
-
-    // GET /tickets/my without session -> 303 Redirect to login
-    let t_req = Request::builder()
-        .uri("/tickets/my")
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let t_resp = app.clone().oneshot(t_req).await.unwrap();
-    assert_eq!(t_resp.status(), StatusCode::SEE_OTHER);
+    for (uri, body) in [
+        ("/bookings/confirm", "event_id=1&quantity=1"),
+        ("/bookings/1/cancel", ""),
+    ] {
+        let (status, headers, _) = post_form_response(&app, uri, None, body).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers.get(header::LOCATION).unwrap().to_str().unwrap(),
+            "/auth/login"
+        );
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -520,91 +396,13 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
         None => return,
     };
 
-    let public_dir = resolve_public_dir().expect("public directory should resolve");
-    let upload_dir = public_dir.join("uploads");
-    let config = AppConfig {
-        host: "127.0.0.1".to_string(),
-        port: 3001,
-        database_url: "mysql://[REDACTED]".to_string(),
-        session_secret: "phase5_integration_session_secret_123456".to_string(),
-        app_env: "test".to_string(),
-        public_dir,
-        upload_dir,
-    };
+    let state = create_test_state_with_pool(&pool);
+    let app = create_test_app(state);
 
-    let app_state = AppState::new(pool.clone(), config);
-    let app = create_test_app(app_state);
-
-    fn extract_cookie(headers: &axum::http::HeaderMap) -> Option<String> {
-        headers.get_all(header::SET_COOKIE).iter().find_map(|v| {
-            let s = v.to_str().ok()?;
-            if s.starts_with("eventpro_sid=") {
-                Some(s.split(';').next().unwrap().to_string())
-            } else {
-                None
-            }
-        })
-    }
-
-    fn extract_csrf_token(html: &str) -> Option<String> {
-        let marker = "name=\"csrf_token\" value=\"";
-        let start = html.find(marker)? + marker.len();
-        let end = html[start..].find('"')? + start;
-        Some(html[start..end].to_string())
-    }
-
-    async fn http_login(app: &Router, email: &str, password: &str) -> (String, String) {
-        let login_page_req = Request::builder()
-            .uri("/auth/login")
-            .body(axum::body::Body::empty())
-            .unwrap();
-        let login_page_resp = app.clone().oneshot(login_page_req).await.unwrap();
-        let cookie_1 =
-            extract_cookie(login_page_resp.headers()).expect("Must receive session cookie");
-        let body = to_bytes(login_page_resp.into_body(), 64 * 1024)
-            .await
-            .unwrap();
-        let csrf_1 =
-            extract_csrf_token(&String::from_utf8_lossy(&body)).expect("Must extract CSRF token");
-
-        let form_body = format!(
-            "email={}&password={}&csrf_token={}",
-            urlencode(email),
-            urlencode(password),
-            urlencode(&csrf_1)
-        );
-        let login_req = Request::builder()
-            .method("POST")
-            .uri("/auth/login")
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .header(header::COOKIE, &cookie_1)
-            .body(axum::body::Body::from(form_body))
-            .unwrap();
-
-        let login_resp = app.clone().oneshot(login_req).await.unwrap();
-        assert_eq!(login_resp.status(), StatusCode::SEE_OTHER);
-        let session_cookie = extract_cookie(login_resp.headers()).unwrap_or(cookie_1);
-
-        let dash_req = Request::builder()
-            .uri("/dashboard")
-            .header(header::COOKIE, &session_cookie)
-            .body(axum::body::Body::empty())
-            .unwrap();
-        let dash_resp = app.clone().oneshot(dash_req).await.unwrap();
-        assert_eq!(dash_resp.status(), StatusCode::OK);
-        let dash_body = to_bytes(dash_resp.into_body(), 128 * 1024).await.unwrap();
-        let dash_csrf = extract_csrf_token(&String::from_utf8_lossy(&dash_body)).unwrap_or(csrf_1);
-
-        (session_cookie, dash_csrf)
-    }
-
-    // Authenticate users
-    // Charlie is attendee ("user"), Alice is "organizer", Admin is "admin"
-    let (attendee_cookie, _initial_attendee_csrf) =
-        http_login(&app, "charlie@mail.com", "User@1234").await;
+    let (attendee_cookie, _) = http_login(&app, "charlie@mail.com", "User@1234").await;
     let (organizer_cookie, organizer_csrf) =
         http_login(&app, "alice@events.com", "Organizer@1").await;
-    let (admin_cookie, _admin_csrf) = http_login(&app, "admin@eventpro.com", "Admin@1234").await;
+    let (admin_cookie, _) = http_login(&app, "admin@eventpro.com", "Admin@1234").await;
 
     let charlie = User::find_by_email(&pool, "charlie@mail.com")
         .await
@@ -642,161 +440,148 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
     let seat_type_id = insert_seat_res.last_insert_id() as i32;
 
     // Obtain fresh CSRF token for the attendee session from the payment review page
-    let pay_get_req = Request::builder()
-        .uri(format!(
+    let (_, _, pay_get_body) = get_response(
+        &app,
+        &format!(
             "/bookings/payment?eventId={}&seat_type_id={}&quantity=1",
             event_id, seat_type_id
-        ))
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let pay_get_resp = app.clone().oneshot(pay_get_req).await.unwrap();
-    assert_eq!(pay_get_resp.status(), StatusCode::OK);
-    let pay_get_body = to_bytes(pay_get_resp.into_body(), 64 * 1024).await.unwrap();
-    let attendee_csrf = extract_csrf_token(&String::from_utf8_lossy(&pay_get_body))
+        ),
+        Some(&attendee_cookie),
+    )
+    .await;
+    let attendee_csrf = extract_csrf_token(&pay_get_body)
         .expect("CSRF token must be present in payment review page");
 
     // A. Role check: Organizers and Admins are FORBIDDEN from booking
-    let org_book_req = Request::builder()
-        .uri(format!("/bookings/book/{}", event_id))
-        .header(header::COOKIE, &organizer_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let org_book_resp = app.clone().oneshot(org_book_req).await.unwrap();
+    let (st, _, _) = get_response(
+        &app,
+        &format!("/bookings/book/{}", event_id),
+        Some(&organizer_cookie),
+    )
+    .await;
     assert_eq!(
-        org_book_resp.status(),
+        st,
         StatusCode::FORBIDDEN,
         "Organizers must not access booking selection form"
     );
 
-    let admin_book_req = Request::builder()
-        .uri(format!("/bookings/book/{}", event_id))
-        .header(header::COOKIE, &admin_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let admin_book_resp = app.clone().oneshot(admin_book_req).await.unwrap();
+    let (st, _, _) = get_response(
+        &app,
+        &format!("/bookings/book/{}", event_id),
+        Some(&admin_cookie),
+    )
+    .await;
     assert_eq!(
-        admin_book_resp.status(),
+        st,
         StatusCode::FORBIDDEN,
         "Admins must not access booking selection form"
     );
 
-    let org_confirm_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/confirm")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &organizer_cookie)
-        .body(axum::body::Body::from(format!(
+    let (st, _, _) = post_form_response(
+        &app,
+        "/bookings/confirm",
+        Some(&organizer_cookie),
+        &format!(
             "event_id={}&quantity=1&csrf_token={}",
             event_id,
             urlencode(&organizer_csrf)
-        )))
-        .unwrap();
-    let org_confirm_resp = app.clone().oneshot(org_confirm_req).await.unwrap();
+        ),
+    )
+    .await;
     assert_eq!(
-        org_confirm_resp.status(),
+        st,
         StatusCode::FORBIDDEN,
         "Organizers must be forbidden from confirming bookings"
     );
 
     // B. CSRF protection verification
-    let bad_csrf_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/confirm")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::from(format!(
+    let (st, _, _) = post_form_response(
+        &app,
+        "/bookings/confirm",
+        Some(&attendee_cookie),
+        &format!(
             "event_id={}&quantity=2&csrf_token=INVALID_CSRF_TOKEN",
             event_id
-        )))
-        .unwrap();
-    let bad_csrf_resp = app.clone().oneshot(bad_csrf_req).await.unwrap();
+        ),
+    )
+    .await;
     assert_eq!(
-        bad_csrf_resp.status(),
+        st,
         StatusCode::FORBIDDEN,
         "Confirming booking with invalid CSRF token must return 403"
     );
 
     // C. Validation: Quantity bounds (0 and 11)
-    let qty_zero_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/confirm")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::from(format!(
+    let (st, _, _) = post_form_response(
+        &app,
+        "/bookings/confirm",
+        Some(&attendee_cookie),
+        &format!(
             "event_id={}&quantity=0&csrf_token={}",
             event_id,
             urlencode(&attendee_csrf)
-        )))
-        .unwrap();
-    let qty_zero_resp = app.clone().oneshot(qty_zero_req).await.unwrap();
+        ),
+    )
+    .await;
     assert_eq!(
-        qty_zero_resp.status(),
+        st,
         StatusCode::BAD_REQUEST,
         "Quantity 0 must be rejected with 400"
     );
 
-    let qty_eleven_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/confirm")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::from(format!(
+    let (st, _, _) = post_form_response(
+        &app,
+        "/bookings/confirm",
+        Some(&attendee_cookie),
+        &format!(
             "event_id={}&quantity=11&csrf_token={}",
             event_id,
             urlencode(&attendee_csrf)
-        )))
-        .unwrap();
-    let qty_eleven_resp = app.clone().oneshot(qty_eleven_req).await.unwrap();
+        ),
+    )
+    .await;
     assert_eq!(
-        qty_eleven_resp.status(),
+        st,
         StatusCode::BAD_REQUEST,
         "Quantity > 10 must be rejected with 400"
     );
 
     // D. Validation: Invalid seat type belonging to another event
-    let alien_seat_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/confirm")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::from(format!(
+    let (st, _, _) = post_form_response(
+        &app,
+        "/bookings/confirm",
+        Some(&attendee_cookie),
+        &format!(
             "event_id={}&seat_type_id=999999&quantity=2&csrf_token={}",
             event_id,
             urlencode(&attendee_csrf)
-        )))
-        .unwrap();
-    let alien_seat_resp = app.clone().oneshot(alien_seat_req).await.unwrap();
+        ),
+    )
+    .await;
     assert_eq!(
-        alien_seat_resp.status(),
+        st,
         StatusCode::BAD_REQUEST,
         "Seat type belonging to nonexistent or foreign event must be rejected"
     );
 
     // E. Successful Booking Creation (Quantity = 3)
-    // Server must calculate price from database (500.00 * 3 = 1500.00), ignoring any tampered price
-    let valid_booking_req = Request::builder()
-        .method("POST")
-        .uri("/bookings/confirm")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::from(format!(
+    let (status, _, confirm_html) = post_form_response(
+        &app,
+        "/bookings/confirm",
+        Some(&attendee_cookie),
+        &format!(
             "event_id={}&seat_type_id={}&quantity=3&total=0.01&csrf_token={}",
             event_id,
             seat_type_id,
             urlencode(&attendee_csrf)
-        )))
-        .unwrap();
-    let valid_booking_resp = app.clone().oneshot(valid_booking_req).await.unwrap();
+        ),
+    )
+    .await;
     assert_eq!(
-        valid_booking_resp.status(),
+        status,
         StatusCode::OK,
         "Valid booking confirmation must render confirmation page"
     );
-    let confirm_body = to_bytes(valid_booking_resp.into_body(), 64 * 1024)
-        .await
-        .unwrap();
-    let confirm_html = String::from_utf8_lossy(&confirm_body);
     assert!(confirm_html.contains("Booking Confirmed!"));
 
     // Verify Database Invariants
@@ -841,8 +626,6 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
     let ticket_id_1 = tickets[0].0;
 
     // Verify Counter Invariants:
-    // Event available seats: 20 - 3 = 17
-    // Seat type booked seats: 0 + 3 = 3
     let ev_seats: (i32,) = sqlx::query_as("SELECT available_seats FROM events WHERE id = ?")
         .bind(event_id)
         .fetch_one(&pool)
@@ -864,60 +647,50 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
     );
 
     // F. Attendee Privacy & Ticket Authorization
-    // Alice (Organizer user_id 2) attempting to view Charlie's ticket -> 403 Forbidden
-    let spy_ticket_req = Request::builder()
-        .uri(format!("/tickets/{}", ticket_id_1))
-        .header(header::COOKIE, &organizer_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let spy_ticket_resp = app.clone().oneshot(spy_ticket_req).await.unwrap();
+    let (st, _, _) = get_response(
+        &app,
+        &format!("/tickets/{}", ticket_id_1),
+        Some(&organizer_cookie),
+    )
+    .await;
     assert_eq!(
-        spy_ticket_resp.status(),
+        st,
         StatusCode::FORBIDDEN,
         "Non-owner cannot view another attendee's ticket"
     );
 
-    // Charlie viewing his own ticket -> 200 OK
-    let own_ticket_req = Request::builder()
-        .uri(format!("/tickets/{}", ticket_id_1))
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::empty())
-        .unwrap();
-    let own_ticket_resp = app.clone().oneshot(own_ticket_req).await.unwrap();
-    assert_eq!(own_ticket_resp.status(), StatusCode::OK);
+    let (st, _, _) = get_response(
+        &app,
+        &format!("/tickets/{}", ticket_id_1),
+        Some(&attendee_cookie),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
 
     // G. Cancellation Authorization: Alien user cannot cancel Charlie's booking
-    let alien_cancel_req = Request::builder()
-        .method("POST")
-        .uri(format!("/bookings/{}/cancel", booking_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &organizer_cookie)
-        .body(axum::body::Body::from(format!(
-            "csrf_token={}",
-            urlencode(&organizer_csrf)
-        )))
-        .unwrap();
-    let alien_cancel_resp = app.clone().oneshot(alien_cancel_req).await.unwrap();
+    let (st, _, _) = post_form_response(
+        &app,
+        &format!("/bookings/{}/cancel", booking_id),
+        Some(&organizer_cookie),
+        &format!("csrf_token={}", urlencode(&organizer_csrf)),
+    )
+    .await;
     assert_eq!(
-        alien_cancel_resp.status(),
+        st,
         StatusCode::FORBIDDEN,
         "Alien user cannot cancel someone else's booking"
     );
 
     // H. Successful Cancellation by Owner
-    let own_cancel_req = Request::builder()
-        .method("POST")
-        .uri(format!("/bookings/{}/cancel", booking_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::from(format!(
-            "csrf_token={}",
-            urlencode(&attendee_csrf)
-        )))
-        .unwrap();
-    let own_cancel_resp = app.clone().oneshot(own_cancel_req).await.unwrap();
+    let (st, _, _) = post_form_response(
+        &app,
+        &format!("/bookings/{}/cancel", booking_id),
+        Some(&attendee_cookie),
+        &format!("csrf_token={}", urlencode(&attendee_csrf)),
+    )
+    .await;
     assert_eq!(
-        own_cancel_resp.status(),
+        st,
         StatusCode::SEE_OTHER,
         "Successful cancellation redirects to /bookings/my"
     );
@@ -963,19 +736,15 @@ async fn test_real_mysql_booking_workflow_lifecycle() {
     );
 
     // I. Repeated Cancellation Rejection (Invariant: Cannot restore counters twice)
-    let repeat_cancel_req = Request::builder()
-        .method("POST")
-        .uri(format!("/bookings/{}/cancel", booking_id))
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, &attendee_cookie)
-        .body(axum::body::Body::from(format!(
-            "csrf_token={}",
-            urlencode(&attendee_csrf)
-        )))
-        .unwrap();
-    let repeat_cancel_resp = app.clone().oneshot(repeat_cancel_req).await.unwrap();
+    let (st, _, _) = post_form_response(
+        &app,
+        &format!("/bookings/{}/cancel", booking_id),
+        Some(&attendee_cookie),
+        &format!("csrf_token={}", urlencode(&attendee_csrf)),
+    )
+    .await;
     assert_eq!(
-        repeat_cancel_resp.status(),
+        st,
         StatusCode::BAD_REQUEST,
         "Cannot cancel already-cancelled booking"
     );

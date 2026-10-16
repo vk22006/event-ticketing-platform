@@ -1,109 +1,111 @@
-# EventPro Performance Benchmarking Suite
+# EventPro Benchmarking and Verification Suite
 
-This directory contains the reproducible benchmark harness, analysis scripts, raw measurements, and comparison reports comparing the original Express.js backend with the replacement Rust/Axum backend.
+This directory contains the consolidated performance benchmark harnesses, statistical analysis engines, correctness verification suites, and raw experimental measurements for EventPro.
+
+---
+
+## Tooling Inventory
+
+The benchmark tooling is organized into three distinct operational categories:
+
+### 1. Correctness & Security Verification Suites
+
+These automated scripts verify that functional parity, data integrity, and security guarantees remain intact under load without running heavy benchmark stress:
+
+| Script | Command | Purpose |
+| :--- | :--- | :--- |
+| `validate_routes.js` | `npm run test:routes` | Verifies semantic HTML responses, HTTP 200 statuses, and authenticated attendee rendering for the Axum backend. |
+| `run_booking_invariant_test.js` | `npm run test:booking` | Executes 30 transactional booking and cancellation cycles, asserting zero seat capacity leaks (seat invariance strictly preserved). |
+| `test_session_writes.js` | `npm run test:sessions` | Verifies that public catalogue GET requests produce 0 session store writes in MySQL and checks authenticated session persistence. |
+| `test_indexes.js` | `npm run test:indexes` | Validates MySQL `EXPLAIN` query execution plans to verify composite indexes (`idx_bookings_user_booked`, `idx_events_organizer_created`) are leveraged. |
+
+To run all correctness checks in sequence:
+```bash
+npm run test
+```
+
+### 2. Canonical Performance Benchmarks
+
+The benchmark suite features a unified, reproducible entry point that enforces binary integrity, isolated telemetry resets, and alternating execution order:
+
+| Script | Command | Purpose |
+| :--- | :--- | :--- |
+| `run_reconciled_benchmark.js` | `npm run bench:reconciled` | **Canonical Unified Benchmark Runner**: Reconciles experimental harnesses; executes alternating 5-trial controlled tests (C=1, 10) and multi-trial pool tuning (10, 20, 30) with release binary SHA-256 verification and `/metrics/db/reset` isolation. |
+| `run_phase3_validation.js` | `npm run bench:validation` | Five-round strictly alternating validation benchmark runner (AB, BA, AB, BA, AB) evaluating baseline vs optimized binaries across all workloads (C=1, 10, 25, 50). |
+| `harness.js` | `node harness.js --target <express|axum> ...` | General-purpose CLI load generator and process resource monitor using `autocannon` and PowerShell `Get-Process`. |
+
+### 3. Profiling, Diagnostics & Analysis
+
+| Script | Command | Purpose |
+| :--- | :--- | :--- |
+| `measure_startup.js` | `npm run test:startup` | Measures cold process startup-to-readiness latency for the Axum release binary (5 clean trials), preserving historical comparison baselines in `results/startup.json`. |
+| `audit_environment.js` | `npm run audit:env` | Audits MySQL server variables (`max_connections`, `innodb_buffer_pool_size`), Windows Defender status, competing processes, and open ports. Saves `results/environment_audit.json`. |
+| `analyze_phase3_validation.js` | `npm run analyze:validation` | Computes statistical summaries (mean ± std dev, min/max, percentiles, query reduction) from the final 5-round alternating validation results. Saves `results/phase3_summary.json`. |
+| `analyze.js` | `npm run analyze:comparison` | Generates full side-by-side metric comparison matrices from historical `raw_express.json` and `raw_axum.json`. Saves `results/comparison.csv` and `results/comparison_summary.json`. |
+
+---
 
 ## Prerequisites
 
 - **Node.js**: v20+ (tested on v24.13.0)
-- **Rust toolchain**: 1.80+ (tested on rustc 1.93.0)
-- **MySQL**: 8.0+ running with the `event_lifecycle` database seeded
+- **Rust Toolchain**: 1.80+ (tested on rustc 1.93.0)
+- **MySQL**: 8.0+ running with the `event_lifecycle` and `tower_sessions` databases seeded
 - **Operating System**: Windows 11 (ARM64 or x86_64)
-
-## Architecture and Tooling
-
-- **Load Generator**: `autocannon` v8.0.0 (high-performance async HTTP load testing using native Node streams).
-- **Process Resource Monitor**: Windows PowerShell `Get-Process` sampling process CPU seconds and Private Working Set (`WorkingSet64`) memory during measurement windows.
-- **Microbenchmarking & Startup**: Sub-millisecond timing of HTTP readiness probes from process launch.
-
-## Benchmark Execution Guide
-
-### 1. Install Benchmark Dependencies
 
 ```bash
 cd benchmarks
 npm install
 ```
 
-### 2. Validating Route & Semantic Correctness
+---
 
-To verify that both backends return HTTP 200 with semantically valid HTML (and that authenticated routes properly render attendee data rather than redirects):
+## Running Correctness Verifications
 
-```bash
-node benchmarks/validate_routes.js
-```
-
-### 3. Measuring Startup Latency
-
-To measure cold startup-to-readiness latency (5 clean trials per backend):
+Before benchmarking or after backend modifications, run the lightweight correctness suite:
 
 ```bash
-node benchmarks/measure_startup.js
+# 1. Verify semantic HTML and authenticated route rendering
+npm run test:routes
+
+# 2. Verify transactional booking integrity and seat invariance (30 cycles)
+npm run test:booking
+
+# 3. Verify public GET requests produce zero session writes in MySQL
+npm run test:sessions
+
+# 4. Verify composite database indexes and query plans
+npm run test:indexes
 ```
 
-### 3. Benchmarking Express.js Backend
+---
 
-1. Start Express in production mode on port 3000:
-   ```cmd
-   set NODE_ENV=production
-   set PORT=3000
-   node app.js
-   ```
+## Executing the Canonical Benchmark
 
-2. Identify the process ID (PID):
-   ```powershell
-   Get-NetTCPConnection -LocalPort 3000 | Select-Object -Property OwningProcess
-   ```
+The primary benchmark runner is `run_reconciled_benchmark.js`. It ensures reproducible results by:
+- Recording the exact release binary SHA-256 hash.
+- Enforcing `RUST_LOG=warn` and process pipe isolation to eliminate console logging overhead.
+- Invoking `POST /metrics/db/reset` prior to each trial so database pool wait times and query durations are measured per trial without pooling artifacts.
+- Alternating test order between configurations to prevent thermal or ordering bias.
 
-3. Run the load test harness:
-   ```bash
-   node benchmarks/harness.js --target express --url http://127.0.0.1:3000 --pid <PID> --concurrencies 1,10,25,50 --duration 10 --warmup 3 --runs 3
-   ```
+To execute the reconciled benchmark:
+```bash
+npm run bench:reconciled
+```
 
-4. Stop the Express process when the run completes.
+Results are saved to `benchmarks/results/reconciled_benchmark_results.json`.
 
-### 4. Benchmarking Axum Backend
+---
 
-1. Build the release binary:
-   ```bash
-   cd eventpro-rs
-   cargo build --release
-   ```
+## Statistical Analysis and Reporting
 
-2. Start the release executable in production mode on port 3001:
-   ```powershell
-   $env:PORT="3001"
-   $env:APP_ENV="production"
-   .\eventpro-rs\target\release\eventpro.exe
-   ```
-
-3. Identify the process ID (PID):
-   ```powershell
-   Get-NetTCPConnection -LocalPort 3001 | Select-Object -Property OwningProcess
-   ```
-
-4. Run the load test harness:
-   ```bash
-   node benchmarks/harness.js --target axum --url http://127.0.0.1:3001 --pid <PID> --concurrencies 1,10,25,50 --duration 10 --warmup 3 --runs 3
-   ```
-
-5. Stop the Axum process when the run completes.
-
-### 5. Generating Comparative Analysis
-
-After both `results/raw_express.json` and `results/raw_axum.json` have been generated:
+To regenerate structured summary tables and statistical aggregations from preserved raw results:
 
 ```bash
-node benchmarks/analyze.js
+# Analyze the final Phase 3 alternating validation run (5 rounds, N=5 per config)
+npm run analyze:validation
+
+# Generate side-by-side Express vs Axum CSV and JSON summaries
+npm run analyze:comparison
 ```
 
-This generates:
-- `results/comparison.csv`: Full side-by-side metric matrix for all tested routes and concurrency levels.
-- `results/comparison_summary.json`: Structured aggregations, standard deviations, and throughput/latency deltas.
-
-## Workloads Evaluated
-
-1. **Catalogue (`GET /events`)**: Public event list with category filtering (2 database queries: events + categories).
-2. **Event Detail (`GET /events/1`)**: Public event view with seat tiers (2 database queries: event + seat tiers).
-3. **Attendee Dashboard (`GET /dashboard`)**: Authenticated user home displaying booked tickets and profile.
-4. **Booking History (`GET /bookings/my`)**: Authenticated history list of all user bookings.
-5. **Operational Probes (`GET /health` & `GET /ready`)**: Axum microbenchmarks measuring non-blocking in-memory health and connection-pool ping latency.
+The canonical benchmark documentation, methodology, architectural tradeoffs, and performance tables are permanently documented in [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md).
