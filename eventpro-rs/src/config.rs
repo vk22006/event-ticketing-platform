@@ -188,7 +188,7 @@ impl AppConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
         let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
 
-        // Default to port 3001 so Rust coexists with Express on 3000
+        // Default to port 3001
         let port = match std::env::var("PORT") {
             Ok(p) => p.parse::<u16>().map_err(|_| ConfigError::InvalidPort(p))?,
             Err(_) => 3001,
@@ -253,7 +253,7 @@ impl AppConfig {
             }
         }
 
-        // Support fallback to Express .env format: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+        // Support fallback to discrete .env format: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
         let host = std::env::var("DB_HOST").unwrap_or_else(|_| "localhost".to_string());
         let port = std::env::var("DB_PORT").unwrap_or_else(|_| "3306".to_string());
         let user = std::env::var("DB_USER").unwrap_or_else(|_| "root".to_string());
