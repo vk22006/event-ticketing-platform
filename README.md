@@ -4,11 +4,7 @@ EventPro is a full-stack event management and ticketing platform designed to man
 
 ![home page](img/home_page.png)
 
-The repository houses two backend implementations that share the same database schema, client assets, and business rules:
-- **Rust / Axum Backend (`eventpro-rs/`)**: A modern, memory-safe backend built with Axum 0.7, Tokio, MiniJinja server-side templates, and SQLx. It enforces strict database transaction boundaries, row-level concurrency locks, and bounded multipart memory limits.
-- **Node.js / Express Backend (Root)**: The baseline Express.js 5 application using EJS templates and MySQL2.
-
-Both implementations connect to the same MySQL 8 database, allowing side-by-side local evaluation, zero-downtime canary rollouts, or immediate rollback if needed.
+The repository is powered exclusively by a high-performance, memory-safe backend written in **Rust and Axum** (`eventpro-rs/`), permanently retiring the legacy Express.js baseline. The architecture enforces strict database transaction boundaries, row-level pessimistic concurrency locks, and bounded multipart memory limits while serving server-rendered MiniJinja templates.
 
 ---
 
@@ -34,19 +30,19 @@ Both implementations connect to the same MySQL 8 database, allowing side-by-side
 
 ---
 
-## Architecture Comparison
+## Architecture Overview
 
-| Component | Rust Service (`eventpro-rs/`) | Express Service (Root) |
+| Component | Technology / Implementation | Details |
 | :--- | :--- | :--- |
-| Runtime & Language | Rust 1.80+ / Tokio multi-threaded async runtime | Node.js 18+ / Single-threaded event loop |
-| Web Framework | Axum 0.7 (Tower middleware ecosystem) | Express.js 5 |
-| HTML Templating | MiniJinja (compiled with automatic contextual HTML escaping) | EJS (Embedded JavaScript) |
-| Database Layer | SQLx with asynchronous MySQL connection pooling | `mysql2` connection pool |
-| Session Store | `tower-sessions` backed by MySQL (`tower_sessions` table) | `express-session` with in-memory / session store |
-| Password Security | Standard `bcrypt` verifying seed blowfish salt rounds | `bcryptjs` |
-| CSRF Architecture | Cryptographic tokens validated constant-time on mutative POSTs | Session-based token check |
-| File Uploads | Bounded streaming multipart parser with magic-byte verification | `multer` disk storage |
-| Static Serving | `tower-http` ServeDir with `X-Content-Type-Options: nosniff` | `express.static` |
+| Runtime & Language | Rust 1.80+ / Tokio multi-threaded async runtime | Memory-safe, high-concurrency asynchronous runtime |
+| Web Framework | Axum 0.7 (Tower middleware ecosystem) | Composable services, type-safe extractors, and custom middleware |
+| HTML Templating | MiniJinja | Compiled in-binary with automatic contextual HTML escaping |
+| Database Layer | SQLx 0.8 | Asynchronous MySQL connection pool with strict transactional guarantees |
+| Session Store | `tower-sessions` | Distributed MySQL storage (`tower_sessions` table) |
+| Password Security | `bcrypt` | Standard Blowfish cost 10 verification (compatible with historical hashes) |
+| CSRF Architecture | Cryptographic tokens | Constant-time token validation on mutative POST requests |
+| File Uploads | Bounded streaming multipart parser | Magic-byte file inspection, 5 MB file cap, 8 MB total request limit |
+| Static Serving | `tower-http` ServeDir | `X-Content-Type-Options: nosniff`, served directly from `public/` |
 
 ---
 
@@ -62,11 +58,11 @@ cp .env.example .env
 | :--- | :--- | :--- | :--- |
 | `DATABASE_URL` | Mandatory (or discrete `DB_*`) | None | MySQL connection string: `mysql://user:pass@host:port/database` |
 | `SESSION_SECRET` | Mandatory | None | Secret key used for session signing (minimum 16 characters) |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Alternative fallback | Express values | Discrete connection parameters used when `DATABASE_URL` is unset |
-| `PORT` | Optional | `3001` (Rust) / `3000` (Node) | Port on which the HTTP server listens |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Alternative fallback | None | Discrete connection parameters used when `DATABASE_URL` is unset |
+| `PORT` | Optional | `3001` | Port on which the Axum HTTP server listens |
 | `HOST` | Optional | `127.0.0.1` | Network interface binding |
-| `APP_ENV` / `NODE_ENV` | Optional | `development` | Set to `production` to enforce `Secure=true` on session cookies |
-| `PUBLIC_DIR` | Optional | `../public` | Directory containing CSS, client JS, and static media |
+| `APP_ENV` | Optional | `development` | Set to `production` to enforce `Secure=true` on session cookies |
+| `PUBLIC_DIR` | Optional | `public` | Directory containing CSS, client JS, and static media |
 | `UPLOAD_DIR` | Optional | `PUBLIC_DIR/uploads` | Filesystem location for stored banner image uploads |
 
 *Security Note: The Rust configuration loader implements a custom debug formatter that masks `DATABASE_URL` and `SESSION_SECRET` as `[REDACTED]`. Secrets are never emitted to standard output or log aggregators.*
@@ -78,7 +74,7 @@ cp .env.example .env
 ### 1. Prerequisites
 - **MySQL Server 8.0+** running on port `3306`
 - **Rust Toolchain 1.80+** (Cargo and rustc)
-- **Node.js 18+** and `npm` (required only if running the Express service)
+- **Node.js 20+** (optional, required only for running the standalone benchmark suite in `benchmarks/`)
 
 ### 2. Database Setup
 Initialize the database schema and sample data using your preferred MySQL client:
@@ -93,7 +89,7 @@ mysql -u root -p event_lifecycle < database/seed.sql
 
 The Rust backend automatically creates its session management table (`tower_sessions`) during boot if it does not already exist. The core application tables (`users`, `events`, `categories`, `seat_types`, `bookings`, `tickets`) remain completely unmodified.
 
-### 3. Running the Rust Backend (Recommended)
+### 3. Running the Rust Backend
 
 From the repository root:
 ```bash
@@ -106,15 +102,6 @@ The server will compile, connect to MySQL, verify the session store, and listen 
 Operational probes:
 - **Liveness probe**: `GET http://localhost:3001/health` (returns JSON status)
 - **Readiness probe**: `GET http://localhost:3001/ready` (tests live MySQL query execution)
-
-### 4. Running the Legacy Express Backend
-
-If you wish to run the Node.js implementation:
-```bash
-npm install
-npm start
-```
-The Express server will start on `http://localhost:3000`.
 
 ---
 
@@ -162,7 +149,7 @@ Event banner uploads are handled through an isolated streaming parser with hard 
 ### 5. Mock Payment Workflow
 The checkout screen (`GET /bookings/payment`) and confirmation endpoint (`POST /bookings/confirm`) simulate an e-commerce checkout. No external payment processors (such as Stripe or PayPal) are invoked. Confirmed bookings immediately issue valid ticket codes for platform demonstration.
 
-## Deployment and Rollback Procedures
+## Deployment Considerations
 
 ### Production Deployment Notes
 1. **Reverse Proxy Setup**: In production, deploy EventPro behind Nginx, Caddy, or a cloud load balancer terminating TLS and forwarding traffic to `127.0.0.1:3001`.
@@ -170,25 +157,23 @@ The checkout screen (`GET /bookings/payment`) and confirmation endpoint (`POST /
 3. **Persistent Upload Volume**: In containerized environments (Docker or Kubernetes), map `UPLOAD_DIR` to a persistent shared volume so uploaded media survives pod restarts.
 4. **Horizontal Scaling**: The database-backed session table (`tower_sessions`) allows running multiple backend instances behind a round-robin load balancer without requiring sticky sessions.
 
-### Zero-Downtime Rollback
-Because the Rust backend introduces zero modifications to existing database tables or columns, rolling back to the Express backend is completely seamless:
-1. Re-point your reverse proxy from port `3001` back to port `3000` (Express).
-2. The `tower_sessions` table added by Rust will simply be ignored by Node.js.
-3. No migration rollbacks, column drops, or data transformations are required.
-
 ## Directory Structure
 
 ```
 .
-├── database/                 <- Shared SQL schema and seed data
+├── benchmarks/               <- Standalone performance benchmarking & verification suite
+│   ├── package.json          <- Benchmark tooling dependencies (autocannon, mysql2)
+│   ├── results/              <- Preserved benchmark measurements & raw data
+│   └── *.js                  <- Benchmark harnesses and correctness tests
+├── database/                 <- Database SQL schema, seed data, and migrations
 │   ├── schema.sql            <- Application tables and relational constraints
-│   └── seed.sql              <- Categories, demonstration events, and users
-├── public/                   <- Shared client assets
+│   ├── seed.sql              <- Categories, demonstration events, and users
+│   └── migrations/           <- Additive indexes and optimizations
+├── public/                   <- Client assets and media storage
 │   ├── css/                  <- Application styles
 │   ├── js/                   <- Client-side script utilities
 │   └── uploads/              <- Uploaded event banners
-├── views/                    <- Legacy Node.js Express EJS templates
-├── eventpro-rs/              <- Modern Rust / Axum Service
+├── eventpro-rs/              <- Rust / Axum Backend Service
 │   ├── Cargo.toml            <- Crate configuration and dependencies
 │   ├── src/
 │   │   ├── main.rs           <- Server entry point, signal trapping, and listener binding
@@ -201,7 +186,7 @@ Because the Rust backend introduces zero modifications to existing database tabl
 │   │   ├── models/           <- Database models (User, Event, Booking, SeatType, Ticket, Category)
 │   │   └── routes/           <- Route handlers (events, bookings, auth, tickets, admin, health)
 │   ├── templates/            <- MiniJinja server-rendered HTML views
-│   └── tests/                <- Test suites (auth, bookings, events, foundation, management, uploads, e2e)
+│   └── tests/                <- Comprehensive integration and correctness test suites
 └── README.md                 <- Consolidated project documentation
 ```
 
