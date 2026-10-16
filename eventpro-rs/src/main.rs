@@ -9,7 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Attempt to load .env from current dir or parent dir (Express root)
+    // Attempt to load .env from current dir or parent dir (repository root)
     if dotenv().is_err() {
         let _ = dotenvy::from_path("../.env");
     }
