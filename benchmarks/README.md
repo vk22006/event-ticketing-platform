@@ -32,7 +32,7 @@ The benchmark suite features a unified, reproducible entry point that enforces b
 | :--- | :--- | :--- |
 | `run_reconciled_benchmark.js` | `npm run bench:reconciled` | **Canonical Unified Benchmark Runner**: Reconciles experimental harnesses; executes alternating 5-trial controlled tests (C=1, 10) and multi-trial pool tuning (10, 20, 30) with release binary SHA-256 verification and `/metrics/db/reset` isolation. |
 | `run_phase3_validation.js` | `npm run bench:validation` | Five-round strictly alternating validation benchmark runner (AB, BA, AB, BA, AB) evaluating baseline vs optimized binaries across all workloads (C=1, 10, 25, 50). |
-| `harness.js` | `node harness.js --target <express|axum> ...` | General-purpose CLI load generator and process resource monitor using `autocannon` and PowerShell `Get-Process`. |
+| `harness.js` | `node harness.js [--target axum]` | General-purpose CLI load generator and process resource monitor using `autocannon` and PowerShell `Get-Process` (defaults to Axum; Express target is historical). |
 
 ### 3. Profiling, Diagnostics & Analysis
 
