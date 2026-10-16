@@ -92,7 +92,8 @@ function killNamedProcesses(names = ['eventpro.exe', 'eventpro-baseline.exe', 'e
     }
 }
 
-async function spawnServer(customOpts = {}) {
+async function spawnServer(targetOrOpts = {}, maybeOpts = {}) {
+    const customOpts = typeof targetOrOpts === 'string' ? maybeOpts : targetOrOpts;
     const port = customOpts.port || 3001;
     const defaultExe = path.join(RS_ROOT, 'target', 'release', 'eventpro.exe');
     const binPath = customOpts.binPath || defaultExe;
